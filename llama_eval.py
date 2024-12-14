@@ -76,7 +76,7 @@ if __name__ == "__main__":
     result = defaultdict(list)
     # save = {}
     # fail_cases = []
-    for data in reference:
+    for data in tqdm(reference):
         sample_id = data["id"]
         score = 0
         
