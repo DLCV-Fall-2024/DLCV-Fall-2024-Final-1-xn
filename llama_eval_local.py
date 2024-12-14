@@ -103,13 +103,13 @@ def extract_score(text):
         if matches:
             score = int(matches[-1].group(1))
             if 1 <= score <= 10:
-                return score
+                return score, text
     except Exception as e:
         pass
-    return None
+    return None, text
 
 def process_batch(pipeline, batch_data, args, is_test=False):
-    """Process a batch of samples with improved error handling"""
+    """Process a batch of samples with improved error handling and score printing"""
     prompts = []
     batch_info = []
     
@@ -133,21 +133,29 @@ def process_batch(pipeline, batch_data, args, is_test=False):
         )
         
         results = []
+        evaluations = []
         for output, (sample_id, _) in zip(outputs, batch_info):
             text = output[0]["generated_text"]
-            score = extract_score(text)
-            if score is None:
+            score_result, eval_text = extract_score(text)
+            
+            if score_result is None:
+                tqdm.write(f"\nWarning: Could not extract valid score for {sample_id}")
+                tqdm.write(f"Model output: {text[:200]}...")
+                score_result = 0
+            else:
+                tqdm.write(f"\nSample {sample_id}:")
+                tqdm.write(f"Score: {score_result}")
                 if args.verbose:
-                    tqdm.write(f"Warning: Could not extract valid score for {sample_id}")
-                    tqdm.write(f"Model output: {text[:200]}...")
-                score = 0
-            results.append(score)
+                    tqdm.write(f"Evaluation:\n{eval_text}\n")
+            
+            results.append(score_result)
+            evaluations.append(eval_text)
         
-        return list(zip(batch_info, results))
+        return list(zip(batch_info, results, evaluations))
     
     except Exception as e:
         tqdm.write(f"Batch processing error: {e}")
-        return [(info, 0) for info in batch_info]
+        return [(info, 0, "") for info in batch_info]
 
 def arguments():
     parser = argparse.ArgumentParser()
@@ -158,7 +166,8 @@ def arguments():
     parser.add_argument("--split", type=str, default="val")
     parser.add_argument("--max_output_tokens", type=int, default=300)
     parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--verbose", action="store_true", help="Print detailed progress")
+    parser.add_argument("--verbose", action="store_true", help="Print detailed evaluation text")
+    parser.add_argument("--output", type=str, help="Save detailed results to file")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -203,35 +212,44 @@ if __name__ == "__main__":
     # Process batches
     print(f"\nProcessing {total_samples} samples...")
     result = defaultdict(list)
+    detailed_results = defaultdict(dict)
     
     with tqdm(total=total_samples, desc="Evaluating") as pbar:
         for batch in batches:
             batch_results = process_batch(pipeline, batch, args, is_test)
             
-            for (sample_id, sample_type), score in batch_results:
+            for (sample_id, sample_type), score, evaluation in batch_results:
                 result[sample_type].append(score)
+                detailed_results[sample_type][sample_id] = {
+                    "score": score,
+                    "evaluation": evaluation
+                }
                 pbar.update(1)
-                if score == 0 and args.verbose:
-                    tqdm.write(f"Warning: Zero score for {sample_id}")
+    
+    # Save detailed results if requested
+    if args.output:
+        with open(args.output, 'w') as f:
+            json.dump(detailed_results, f, indent=2)
     
     # Calculate and display results
-    print("\nEvaluation Results:")
+    print("\nFinal Results:")
     total = []
+    
     for sample_type, scores in result.items():
         if scores:
             valid_scores = [s for s in scores if s > 0]
             if valid_scores:
-                score = np.mean(valid_scores)
-                print(f"{sample_type.capitalize()} score: {score:.3f}")
+                avg_score = np.mean(valid_scores)
+                print(f"\n{sample_type.capitalize()}:")
+                print(f"Average score: {avg_score:.3f}")
                 print(f"Valid samples: {len(valid_scores)}/{len(scores)}")
-                total.append(score)
+                total.append(avg_score)
             else:
-                print(f"Warning: No valid scores for {sample_type}")
+                print(f"\nWarning: No valid scores for {sample_type}")
     
     if total:
         llm_score = np.mean(total)
-        print(f"\nLLM judges: {llm_score:.3f}")
-        print(f"Final score ({'test' if is_test else 'validation'} set): {llm_score:.3f}")
+        print(f"\nOverall LLM score: {llm_score:.3f}")
         
         if not is_test:
             print("\nCalculating BLEU scores...")
