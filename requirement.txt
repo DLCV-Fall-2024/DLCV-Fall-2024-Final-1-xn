@@ -11,24 +11,30 @@ plotly>=5.13.0
 
 # Deep learning frameworks
 torch>=2.0.0
+torchvision
 tensorflow>=2.13.0
 
 # Hugging Face libraries
-transformers>=4.46.3  # Keeping the more specific version from second file
+transformers>=4.46.3
 datasets>=2.16.0
 peft>=0.7.0
-huggingface_hub  # Added from second file
-pycocoevalcap  # Added from second file
+huggingface_hub
+pycocoevalcap
 
 # Training utilities
 lightning>=2.1.0
 wandb>=0.16.0
 nltk>=3.8.0
-accelerate==0.26.0  # Using exact version from second file
+accelerate==0.26.0
 bitsandbytes>=0.41.0
 
 # Image processing
 Pillow>=10.0.0
+opencv-python
+
+# UI and visualization
+gradio==4.14.0
+gradio_imageslider
 
 # Progress bars
 tqdm>=4.65.0
@@ -36,3 +42,5 @@ tqdm>=4.65.0
 # API interaction
 requests>=2.31.0
 python-dotenv>=1.0.0
+
+faiss-gpu
