@@ -124,3 +124,18 @@ If you have any problems related to Final Project, you may
 - Contact TAs by e-mail ([ntudlcv@gmail.com](mailto:ntudlcv@gmail.com))
 - Post your question under `[Final challenge 1] Discussion` section in NTU Cool Discussion
 
+# How to download_dataset
+```
+python3 download_dataset.py
+```
+
+# How to run depth_anything rag:
+```
+bash build_retriever.sh
+bash depth_anything_rag.sh
+```
+
+# How to run local llama evaluation
+```
+bash llama_eval_local.sh
+```
