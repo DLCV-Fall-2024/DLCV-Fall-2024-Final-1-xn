@@ -9,12 +9,8 @@ import numpy as np
 import torch
 import transformers
 from datasets import load_dataset
-from huggingface_hub import login
-from tqdm import tqdm
 
 from scorer import Scorer
-
-login(token="")
 
 
 def formulate_template(few_shot_path, message, sample_type="general"):
@@ -61,8 +57,8 @@ def arguments():
     parser.add_argument("--few_shot", type=str, default="few_shot")
     parser.add_argument("--prediction", type=str, default=None)
     parser.add_argument("--dataset_name", type=str, default="ntudlcv/dlcv_2024_final1")
-    parser.add_argument("--split", type=str, default="test")
-    parser.add_argument("--save", type=str, default="llama3_eval.json")
+    parser.add_argument("--split", type=str, default="val")
+    # parser.add_argument("--save", type=str, default="llama3_eval.json")
     parser.add_argument("--max_output_tokens", type=int, default=300)
     return parser.parse_args()
 
@@ -84,9 +80,9 @@ if __name__ == "__main__":
     NLP_REFERENCE = {}
 
     result = defaultdict(list)
-    save = {}
-    fail_cases = []
-    for data in tqdm(reference):
+    # save = {}
+    # fail_cases = []
+    for data in reference:
         sample_id = data["id"]
         score = 0
 
@@ -94,8 +90,7 @@ if __name__ == "__main__":
             continue
 
         message = {"reference": "", "prediction": prediction[sample_id]}
-
-        message["reference"] = data["conversations"][0]["value"]
+        message["reference"] = data["conversations"][1]["value"]
         sample_type = (sample_id.split("_")[1]).lower()
         messages = formulate_template(args.few_shot, message, sample_type)
         for max_tokens in [args.max_output_tokens, 1024]:
@@ -113,18 +108,18 @@ if __name__ == "__main__":
             except:
                 continue
 
-        if score == 0:
-            print(f"Missing score for sample: {sample_id}")
-            fail_cases.append(sample_id)
+        # if score == 0:
+        #     print(f"Missing score for sample: {sample_id}")
+        #     fail_cases.append(sample_id)
         result[sample_type].append(score)
 
-        save[sample_id] = {
-            "prediction": outputs[0]["generated_text"][-1]["content"],
-            "score": score,
-        }
-        with open(args.save, "w") as f:
-            json.dump(save, f, indent=4)
-        NLP_REFERENCE[sample_id] = [data["conversations"][0]["value"]]
+        # save[sample_id] = {
+        #     "prediction": outputs[0]["generated_text"][-1]["content"],
+        #     "score": score
+        # }
+        # with open(args.save, "w") as f:
+        #     json.dump(save, f, indent=4)
+        NLP_REFERENCE[sample_id] = [data["conversations"][1]["value"]]
 
     coco_eval = Scorer(NLP_HYPOTHESIS, NLP_REFERENCE)
     total_scores = coco_eval.evaluate()

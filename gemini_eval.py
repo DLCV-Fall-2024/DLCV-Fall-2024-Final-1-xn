@@ -9,7 +9,6 @@ from collections import defaultdict
 import google.generativeai as genai
 import numpy as np
 from datasets import load_dataset
-from tqdm import tqdm
 
 from scorer import Scorer
 
@@ -37,8 +36,8 @@ def arguments():
     parser.add_argument("--few_shot", type=str, default="few_shot")
     parser.add_argument("--prediction", type=str, default=None)
     parser.add_argument("--dataset_name", type=str, default="ntudlcv/dlcv_2024_final1")
-    parser.add_argument("--split", type=str, default="test")
-    parser.add_argument("--save", type=str, default="gemini_eval.json")
+    parser.add_argument("--split", type=str, default="val")
+    # parser.add_argument("--save", type=str, default="gemini_eval.json")
     parser.add_argument("--api_key", type=str, default=None)
     return parser.parse_args()
 
@@ -64,9 +63,9 @@ if __name__ == "__main__":
 
     # Evaluate
     result = defaultdict(list)
-    save = {}
+    # save = {}
     # fail_cases = []
-    for data in tqdm(reference):
+    for data in reference:
         sample_id = data["id"]
         score = 0
 
@@ -74,7 +73,8 @@ if __name__ == "__main__":
             continue
 
         message = {"reference": "", "prediction": prediction[sample_id]}
-        message["reference"] = data["conversations"][0]["value"]
+        print(data["conversations"])
+        message["reference"] = data["conversations"][1]["value"]
         sample_type = (sample_id.split("_")[1]).lower()
         messages = format_prompt(args.few_shot, message, sample_type)
         try:
@@ -91,11 +91,14 @@ if __name__ == "__main__":
             # fail_cases.append(sample_id)
         result[sample_type].append(score)
 
-        save[sample_id] = {"prediction": response.text, "score": score}
-        with open(args.save, "w") as f:
-            json.dump(save, f, indent=4)
+        # save[sample_id] = {
+        #     "prediction": response.text,
+        #     "score": score
+        # }
+        # with open(args.save, "w") as f:
+        #     json.dump(save, f, indent=4)
         time.sleep(3)
-        NLP_REFERENCE[sample_id] = [data["conversations"][0]["value"]]
+        NLP_REFERENCE[sample_id] = [data["conversations"][1]["value"]]
 
     coco_eval = Scorer(NLP_HYPOTHESIS, NLP_REFERENCE)
     total_scores = coco_eval.evaluate()

@@ -8,6 +8,8 @@ jupyter>=1.0.0
 ipykernel>=6.0.0
 scipy>=1.10.0
 plotly>=5.13.0
+datasets
+pillow
 
 # Deep learning frameworks
 torch>=2.0.0
