@@ -1,5 +1,6 @@
 import torch
 from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
+from peft import PeftModel
 import gc
 import os
 from tqdm import tqdm
@@ -8,8 +9,9 @@ from PIL import Image
 import time
 
 # Configuration
-MAX_TOKEN = 100
-OUTPUT_DIR = "baseline_results"
+MAX_TOKEN = 1000
+OUTPUT_DIR = "inference_results"
+FINE_TUNED_MODEL_DIR = "fine_tuned_results/lora_final.pt"
 MODEL_ID = "llava-hf/llava-v1.6-vicuna-7b-hf"
 DATA_ROOT = "data"
 DEBUG = True
@@ -64,10 +66,22 @@ class LocalDataProcessor:
                 device_map="cuda:0",
                 low_cpu_mem_usage=True
             )
+
+            # Load the LoRA adapter
+            if not os.path.exists(FINE_TUNED_MODEL_DIR):
+                raise FileNotFoundError(f"Fine-tuned model weights not found at {FINE_TUNED_MODEL_DIR}")
+
+            self.model = PeftModel.from_pretrained(
+                self.model,
+                FINE_TUNED_MODEL_DIR,
+                torch_dtype=torch.float16
+            )
+            self.model.eval()
+            self.model.to(torch.device("cuda:0" if torch.cuda.is_available() else "cpu"))
             
             self.device = torch.device("cuda:0")
             print(f"Using device: {self.device}")
-            print("Model loaded successfully")
+            print("Model loaded successfully with fine-tuned LoRA weights")
 
         except Exception as e:
             print(f"Error loading model: {e}")
@@ -85,7 +99,7 @@ class LocalDataProcessor:
                 "traffic signs (no parking, warning, directional, etc.), traffic lights (red, green, yellow), "
                 "traffic cones, barriers, miscellaneous(debris, dustbin, animals, etc.). You must not "
                 "discuss any objects beyond the seven categories above. Please describe each object's "
-                "color, position, status, implication, responses, and how they influence ego car. EXPERT:"
+                "color, position, status, implication, respones, and how they influence ego car. EXPERT:"
             ),
             "region": (
                 "A chat between a curious human and an autonomous driving expert, specializing in "
@@ -217,7 +231,7 @@ def main():
     try:
         processor = LocalDataProcessor()
         processor.process_all_tasks()
-        print("\nProcessing complete!")
+        print("\nInference complete!")
     except Exception as e:
         print(f"Error in main execution: {e}")
         raise
