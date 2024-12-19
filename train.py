@@ -1,16 +1,22 @@
-import torch
-from torchvision import transforms
-from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration, AdamW, get_linear_schedule_with_warmup
-from peft import get_peft_model, LoraConfig
-import gc
-import os
-from tqdm import tqdm
-import numpy as np
-import json
-from PIL import Image
-from torch.utils.data import Dataset, DataLoader, ConcatDataset
-import time
 import argparse
+import gc
+import json
+import os
+import time
+
+import numpy as np
+import torch
+from peft import LoraConfig, get_peft_model
+from PIL import Image
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
+from torchvision import transforms
+from tqdm import tqdm
+from transformers import (
+    AdamW,
+    LlavaNextForConditionalGeneration,
+    LlavaNextProcessor,
+    get_linear_schedule_with_warmup,
+)
 
 # Configuration
 MAX_TOKEN = 1000
@@ -28,6 +34,7 @@ SAVE_INTERVAL = 100  # Save every 100 steps
 torch.cuda.set_per_process_memory_fraction(0.95)
 torch.backends.cuda.matmul.allow_tf32 = True
 
+
 class DrivingDataset(Dataset):
     def __init__(self, annotations_file, root_dir, task_type):
         """
@@ -36,9 +43,9 @@ class DrivingDataset(Dataset):
         self.root_dir = root_dir
         self.task_type = task_type
         self.samples = []
-        
+
         try:
-            with open(annotations_file, 'r') as f:
+            with open(annotations_file, "r") as f:
                 for line in f:
                     data = json.loads(line)
                     self.samples.append(data)
@@ -53,30 +60,26 @@ class DrivingDataset(Dataset):
         Retrieves the image and the corresponding ground truth for training.
         """
         sample = self.samples[idx]
-        image_path = sample['image']
+        image_path = sample["image"]
         # Modify for using Kaggle dataset
         # if the root_dir is data or data/, then the image_path is the image path
-        if self.root_dir.endswith('data') or self.root_dir.endswith('data/'):
+        if self.root_dir.endswith("data") or self.root_dir.endswith("data/"):
             image_path = os.path.join(os.path.dirname(self.root_dir), image_path)
 
         image = Image.open(image_path).convert("RGB")
-        
-        conversations = sample['conversations']
-        
+
+        conversations = sample["conversations"]
+
         # Extract the GPT response as label
         label = ""
         for convo in conversations:
-            if convo['from'].lower() == 'gpt':
-                label = convo['value']
+            if convo["from"].lower() == "gpt":
+                label = convo["value"]
                 break
 
         prompt = self.get_prompt(self.task_type)
-        
-        return {
-            "image": image,
-            "prompt": prompt,
-            "label": label
-        }
+
+        return {"image": image, "prompt": prompt, "label": label}
 
     def get_prompt(self, task_type):
         """Get appropriate prompt for task type"""
@@ -104,9 +107,10 @@ class DrivingDataset(Dataset):
                 "providing specific and helpful driving suggestions. The expert receives an image of "
                 "traffic captured from the perspective of the ego car. USER: <image>\n"
                 "Please provide driving suggestions for the ego car based on the current scene. EXPERT:"
-            )
+            ),
         }
         return prompts.get(task_type, "")
+
 
 class LocalDataProcessor:
     def __init__(self):
@@ -119,18 +123,20 @@ class LocalDataProcessor:
         try:
             torch.cuda.empty_cache()
             gc.collect()
-            
+
             if torch.cuda.is_available():
                 print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
-                print(f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.1f}MB")
+                print(
+                    f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.1f}MB"
+                )
 
             self.processor = LlavaNextProcessor.from_pretrained(MODEL_ID)
-            
+
             self.model = LlavaNextForConditionalGeneration.from_pretrained(
                 MODEL_ID,
                 torch_dtype=torch.float16,
                 device_map="cuda:0",
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=True,
             )
 
             # LoRA Configuration
@@ -140,14 +146,14 @@ class LocalDataProcessor:
                 lora_alpha=32,
                 lora_dropout=0.1,
                 bias="none",
-                task_type="CAUSAL_LM"
+                task_type="CAUSAL_LM",
             )
 
             # Apply LoRA to the model
             self.model = get_peft_model(self.model, lora_config)
             # Print trainable parameters
             self.model.print_trainable_parameters()
-            
+
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             print(f"Using device: {self.device}")
             print("Model loaded successfully")
@@ -160,29 +166,26 @@ class LocalDataProcessor:
         """Custom collate function to handle batching."""
         try:
             # images = torch.stack([item['image'] for item in batch])
-            images = [item['image'] for item in batch]
-            prompts = [item['prompt'] for item in batch]
-            labels = [item['label'] for item in batch]
-            
+            images = [item["image"] for item in batch]
+            prompts = [item["prompt"] for item in batch]
+            labels = [item["label"] for item in batch]
+
             # Tokenize prompts with images
             inputs = self.processor(
-                text=prompts,
-                images=images,
-                return_tensors="pt",
-                padding=True
+                text=prompts, images=images, return_tensors="pt", padding=True
             )
-            
+
             # Tokenize labels
             label_tokens = self.processor.tokenizer(
                 labels,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=MAX_TOKEN
+                max_length=MAX_TOKEN,
             ).input_ids
-            
-            inputs['labels'] = label_tokens
-            
+
+            inputs["labels"] = label_tokens
+
             return inputs
 
         except Exception as e:
@@ -198,13 +201,13 @@ class LocalDataProcessor:
         train_tasks = [
             ("general", "train_general_perception.jsonl"),
             ("region", "train_region_perception.jsonl"),
-            ("driving", "train_driving_suggestion.jsonl")
+            ("driving", "train_driving_suggestion.jsonl"),
         ]
 
         val_tasks = [
             ("general", "val_general_perception.jsonl"),
             ("region", "val_region_perception.jsonl"),
-            ("driving", "val_driving_suggestion.jsonl")
+            ("driving", "val_driving_suggestion.jsonl"),
         ]
 
         # Load training datasets
@@ -219,12 +222,12 @@ class LocalDataProcessor:
         print(f"Total training samples: {len(combined_train_dataset)}")
 
         train_loader = DataLoader(
-            combined_train_dataset, 
-            batch_size=BATCH_SIZE, 
-            shuffle=True, 
-            num_workers=4, 
+            combined_train_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            num_workers=4,
             pin_memory=True,
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
         )
 
         # Load validation datasets
@@ -239,20 +242,20 @@ class LocalDataProcessor:
         print(f"Total validation samples: {len(combined_val_dataset)}")
 
         val_loader = DataLoader(
-            combined_val_dataset, 
-            batch_size=BATCH_SIZE, 
-            shuffle=False, 
-            num_workers=4, 
+            combined_val_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            num_workers=4,
             pin_memory=True,
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
         )
 
         # Optimizer and Scheduler
         optimizer = AdamW(self.model.parameters(), lr=LEARNING_RATE)
         total_steps = len(train_loader) * EPOCHS
-        scheduler = get_linear_schedule_with_warmup(optimizer, 
-                                                    num_warmup_steps=WARMUP_STEPS, 
-                                                    num_training_steps=total_steps)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=WARMUP_STEPS, num_training_steps=total_steps
+        )
 
         self.model.train()
         self.model.to(self.device)
@@ -264,7 +267,11 @@ class LocalDataProcessor:
 
             for step, batch in enumerate(progress_bar):
                 try:
-                    batch = {k: v.to(self.device) for k, v in batch.items() if isinstance(v, torch.Tensor)}
+                    batch = {
+                        k: v.to(self.device)
+                        for k, v in batch.items()
+                        if isinstance(v, torch.Tensor)
+                    }
                     outputs = self.model(**batch)
                     loss = outputs.loss
                     loss.backward()
@@ -285,17 +292,21 @@ class LocalDataProcessor:
                     continue
 
             avg_train_loss = epoch_train_loss / len(train_loader)
-            print(f"Epoch {epoch + 1} completed. Average Training Loss: {avg_train_loss:.4f}")
+            print(
+                f"Epoch {epoch + 1} completed. Average Training Loss: {avg_train_loss:.4f}"
+            )
 
             # Evaluate on validation set after each epoch
             avg_val_loss = self.evaluate_model(val_loader)
-            print(f"Epoch {epoch + 1} completed. Average Validation Loss: {avg_val_loss:.4f}")
+            print(
+                f"Epoch {epoch + 1} completed. Average Validation Loss: {avg_val_loss:.4f}"
+            )
 
             # Save LoRA weights at the end of each epoch
-            self.save_lora_weights(epoch + 1, 'end_of_epoch')
+            self.save_lora_weights(epoch + 1, "end_of_epoch")
 
         # Save final LoRA weights
-        self.save_lora_weights('final')
+        self.save_lora_weights("final")
 
         print("Training complete!")
 
@@ -307,7 +318,11 @@ class LocalDataProcessor:
         with torch.no_grad():
             for batch in tqdm(val_loader, desc="Evaluating", leave=False):
                 try:
-                    batch = {k: v.to(self.device) for k, v in batch.items() if isinstance(v, torch.Tensor)}
+                    batch = {
+                        k: v.to(self.device)
+                        for k, v in batch.items()
+                        if isinstance(v, torch.Tensor)
+                    }
                     outputs = self.model(**batch)
                     loss = outputs.loss
                     total_val_loss += loss.item()
@@ -332,11 +347,19 @@ class LocalDataProcessor:
         except Exception as e:
             print(f"Error saving LoRA weights: {e}")
 
+
 def main():
     try:
         # Add argument parsing
-        parser = argparse.ArgumentParser(description='Train the model with a specified data root directory')
-        parser.add_argument('--data_root', type=str, default=DATA_ROOT, help='Path to the data root directory')
+        parser = argparse.ArgumentParser(
+            description="Train the model with a specified data root directory"
+        )
+        parser.add_argument(
+            "--data_root",
+            type=str,
+            default=DATA_ROOT,
+            help="Path to the data root directory",
+        )
         args = parser.parse_args()
 
         processor = LocalDataProcessor()
@@ -345,6 +368,7 @@ def main():
     except Exception as e:
         print(f"Error in main execution: {e}")
         raise
+
 
 if __name__ == "__main__":
     main()

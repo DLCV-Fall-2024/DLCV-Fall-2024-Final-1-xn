@@ -1,7 +1,7 @@
 # DLCV Final Project
 
 # How to run your code?
-* TODO: Please provide the scripts for TAs to reproduce your results, including training and inference. For example, 
+* TODO: Please provide the scripts for TAs to reproduce your results, including training and inference. For example,
 
 ```
 bash train.sh <Path to gt image folder> <Path to annot file>
@@ -14,7 +14,7 @@ You can add more arguments to the script if you need.
 To start working on this final project, you should clone this repository into your local machine by the following command:
 ```
     git clone https://github.com/DLCV-Fall-2024/DLCV-Fall-2024-Final-1-<team_name>.git
-```  
+```
 Note that you should replace `<team_name>` with your own team name.
 
 For more details, please click [this link](https://docs.google.com/presentation/d/1eeXx_dL0OgkDn9_lhXnimTHrE6OYvAiiVOBwo2CTVOQ/edit#slide=id.g3196368f9ef_0_288) to view the slides of Final Project - .Multimodal Perception and Comprehension of Corner Cases in Autonomous Driving **The introduction video for final project can be accessed in the slides.**
@@ -28,7 +28,7 @@ CODA-LM/
 │   │   └── low.json
 │   └── suggestion_few_shot/
 │       ├── high.json
-│       └── low.json 
+│       └── low.json
 └── gemini_eval.py
 └── llama_eval.py
 └── scorer.py
@@ -60,16 +60,16 @@ from datasets import load_dataset
 
 dataset = load_dataset("ntudlcv/dlcv_2024_final1", split=split, streaming=True)
 ```
-The argmument `split` can be `["train", "val", "test"]`.
+The argument `split` can be `["train", "val", "test"]`.
 
 ## Dataset Format
 for each data, the data format is as follows:
 ```
 {
     "id": {subset_name}_{question_type}_{index},
-    "image": PIL image, 
+    "image": PIL image,
     "conversations": [
-        {"from": "human", "value": "input text"}, 
+        {"from": "human", "value": "input text"},
         {"from": "gpt", "value": "output text"}
     ], ...
 }
@@ -81,7 +81,7 @@ the value of key `conversations` shares the same format of LLaVA’s instruction
 * You need to submit your predicted json file to the following link: [Codalab](https://codalab.lisn.upsaclay.fr/competitions/21009?secret_key=7bbae235-15a2-4e00-8e21-766ce95cd917&fbclid=IwZXh0bgNhZW0CMTAAAR1ZAHQiBXUiK8EN7bJm9wxxCA4DPutVfoiIOeLp6RVxpy31NSlot88bALE_aem_k_BebUC_R8P_nq9dTDlIzA)
 * The submission file should be a `zip` file named in `pred.zip` containing the following files:
     * api_key.txt: your **valid** Gemini API key
-    * submission.json: your predicted json file (key: `id`, value: `your model's prediction`), 
+    * submission.json: your predicted json file (key: `id`, value: `your model's prediction`),
     * e.g.
 ![Submission Example](images/submission.png)
 * You can submit up to **5** times per day.
@@ -100,7 +100,7 @@ python3 llama_eval.py --prediction <you predicted json file>
 * For the argument `--prediction`, you should provide the json file which format is identical to "submission.json" described in [Submission Rules](#Submission-Rules).
 * Both files will return the LLM judges and BLEU score of your predicted json file. The `Total score` is calculated by the following formula: `0.8 * LLM Score + 0.2 * BLEU-3`
 ```
-Genral score: x.xx
+General score: x.xx
 Reasoning score: x.xx
 Suggestion score: x.xx
 LLM judges: x.xx
@@ -117,7 +117,7 @@ Total score: x.xx
 
 ### Deadline
 113/12/26 (Thur.) 23:59 (GMT+8)
-    
+
 # Q&A
 If you have any problems related to Final Project, you may
 - Use TA hours

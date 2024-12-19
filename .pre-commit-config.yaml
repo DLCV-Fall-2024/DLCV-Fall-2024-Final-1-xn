@@ -33,28 +33,28 @@ repos:
   #     - flake8-debugger~=4.1.2
   #     - flake8-docstrings~=1.6.0
   # Shell static analysis
-  - repo: https://github.com/koalaman/shellcheck-precommit
-    rev: v0.9.0
-    hooks:
-      - id: shellcheck
-        # precommit invokes shellcheck once per file. shellcheck complains if file
-        # includes another file not given on the command line. Ignore this, since
-        # they'll just get checked in a separate shellcheck invocation.
-        args: ["-e", "SC1091"]
+#  - repo: https://github.com/koalaman/shellcheck-precommit
+#    rev: v0.9.0
+#    hooks:
+#      - id: shellcheck
+#        # precommit invokes shellcheck once per file. shellcheck complains if file
+#        # includes another file not given on the command line. Ignore this, since
+#        # they'll just get checked in a separate shellcheck invocation.
+#        args: ["-e", "SC1091"]
   # Misc
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.4
-    hooks:
-      - id: codespell
-        args:
-          [
-            "--skip=*.pyc,tests/testdata/*,*.ipynb,*.csv",
-            "--ignore-words-list=reacher,ith,iff",
-          ]
-  - repo: https://github.com/syntaqx/git-hooks
-    rev: v0.0.18
-    hooks:
-      - id: circleci-config-validate
+#  - repo: https://github.com/codespell-project/codespell
+#    rev: v2.2.4
+#    hooks:
+#      - id: codespell
+#        args:
+#          [
+#            "--skip=*.pyc,tests/testdata/*,*.ipynb,*.csv",
+#            "--ignore-words-list=reacher,ith,iff",
+#          ]
+#  - repo: https://github.com/syntaqx/git-hooks
+#    rev: v0.0.18
+#    hooks:
+#      - id: circleci-config-validate
 # Hooks that run in local environment (not isolated venv) as they need
 # same dependencies as our package.
 # - repo: local

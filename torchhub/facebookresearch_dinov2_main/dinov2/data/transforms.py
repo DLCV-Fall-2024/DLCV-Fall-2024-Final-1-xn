@@ -15,10 +15,14 @@ class GaussianBlur(transforms.RandomApply):
     Apply Gaussian Blur to the PIL image.
     """
 
-    def __init__(self, *, p: float = 0.5, radius_min: float = 0.1, radius_max: float = 2.0):
+    def __init__(
+        self, *, p: float = 0.5, radius_min: float = 0.1, radius_max: float = 2.0
+    ):
         # NOTE: torchvision is applying 1 - probability to return the original image
         keep_p = 1 - p
-        transform = transforms.GaussianBlur(kernel_size=9, sigma=(radius_min, radius_max))
+        transform = transforms.GaussianBlur(
+            kernel_size=9, sigma=(radius_min, radius_max)
+        )
         super().__init__(transforms=[transform], p=keep_p)
 
 
@@ -61,7 +65,9 @@ def make_classification_train_transform(
     mean: Sequence[float] = IMAGENET_DEFAULT_MEAN,
     std: Sequence[float] = IMAGENET_DEFAULT_STD,
 ):
-    transforms_list = [transforms.RandomResizedCrop(crop_size, interpolation=interpolation)]
+    transforms_list = [
+        transforms.RandomResizedCrop(crop_size, interpolation=interpolation)
+    ]
     if hflip_prob > 0.0:
         transforms_list.append(transforms.RandomHorizontalFlip(hflip_prob))
     transforms_list.extend(

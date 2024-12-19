@@ -4,20 +4,19 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from gzip import GzipFile
 from io import BytesIO
 from mmap import ACCESS_READ, mmap
-import os
 from typing import Any, Callable, List, Optional, Set, Tuple
-import warnings
 
 import numpy as np
 
 from .extended import ExtendedVisionDataset
-
 
 _Labels = int
 
@@ -139,7 +138,9 @@ class ImageNet22k(ExtendedVisionDataset):
 
         return sorted(class_ids)
 
-    def _load_entries_class_ids(self, root: Optional[str] = None) -> Tuple[List[_Entry], List[str]]:
+    def _load_entries_class_ids(
+        self, root: Optional[str] = None
+    ) -> Tuple[List[_Entry], List[str]]:
         root = self.get_root(root)
         entries: List[_Entry] = []
         class_ids = self._find_class_ids(root)
@@ -212,11 +213,16 @@ class ImageNet22k(ExtendedVisionDataset):
             data = mapped_data[512:]  # Skip entry header block
 
             if len(data) >= 2 and tuple(data[:2]) == (0x1F, 0x8B):
-                assert index in self._gzipped_indices, f"unexpected gzip header for sample {index}"
+                assert (
+                    index in self._gzipped_indices
+                ), f"unexpected gzip header for sample {index}"
                 with GzipFile(fileobj=BytesIO(data)) as g:
                     data = g.read()
         except Exception as e:
-            raise RuntimeError(f"can not retrieve image data for sample {index} " f'from "{class_id}" tarball') from e
+            raise RuntimeError(
+                f"can not retrieve image data for sample {index} "
+                f'from "{class_id}" tarball'
+            ) from e
 
         return data
 
