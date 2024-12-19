@@ -127,6 +127,9 @@ class LocalDataProcessor:
                 print(f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.1f}MB")
 
             self.processor = LlavaNextProcessor.from_pretrained(MODEL_ID)
+
+            self.processor.patch_size = 14
+            self.processor.vision_feature_select_strategy = "full"
             
             # Configure 4-bit quantization
             bnb_config = BitsAndBytesConfig(
