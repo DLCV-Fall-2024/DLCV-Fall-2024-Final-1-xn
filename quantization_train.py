@@ -146,7 +146,7 @@ class LocalDataProcessor:
             #     device_map="auto",
             #     low_cpu_mem_usage=True
             # )
-            self.model = transformers.AutoModelForCausalLM(MODEL_ID)
+            self.model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_ID)
 
             # Apply Liger Kernel
             apply_liger_kernel_to_llama()
