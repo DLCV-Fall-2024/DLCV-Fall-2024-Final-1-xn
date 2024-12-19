@@ -13,6 +13,9 @@ import time
 import argparse
 import traceback
 
+import transformers
+from liger_kernel.transformers import apply_liger_kernel_to_llama
+
 GRADIENT_ACCUMULATION_STEPS = 4
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
@@ -140,6 +143,9 @@ class LocalDataProcessor:
                 device_map="auto",
                 low_cpu_mem_usage=True
             )
+
+            # Apply Liger Kernel
+            apply_liger_kernel_to_llama()
 
             # LoRA Configuration
             lora_config = LoraConfig(
