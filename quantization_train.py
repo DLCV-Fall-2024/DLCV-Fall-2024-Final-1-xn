@@ -139,17 +139,16 @@ class LocalDataProcessor:
                 bnb_4bit_compute_dtype=torch.float16
             )
             
-            # self.model = LlavaNextForConditionalGeneration.from_pretrained(
-            #     MODEL_ID,
-            #     quantization_config=bnb_config,
-            #     torch_dtype=torch.float16,
-            #     device_map="auto",
-            #     low_cpu_mem_usage=True
-            # )
-            self.model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_ID)
+            self.model = LlavaNextForConditionalGeneration.from_pretrained(
+                MODEL_ID,
+                quantization_config=bnb_config,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                low_cpu_mem_usage=True
+            )
 
             # Apply Liger Kernel
-            apply_liger_kernel_to_llama()
+            apply_liger_kernel_to_llama(self.model)
 
             # LoRA Configuration
             lora_config = LoraConfig(
