@@ -145,7 +145,7 @@ class LocalDataProcessor:
             )
 
             # Apply Liger Kernel
-            apply_liger_kernel_to_llama()
+            # apply_liger_kernel_to_llama()
 
             # LoRA Configuration
             lora_config = LoraConfig(
