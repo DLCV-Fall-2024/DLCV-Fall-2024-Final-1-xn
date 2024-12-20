@@ -49,3 +49,5 @@ faiss-gpu
 
 # Liger Kernel
 liger-kernel
+
+sentencepiece
