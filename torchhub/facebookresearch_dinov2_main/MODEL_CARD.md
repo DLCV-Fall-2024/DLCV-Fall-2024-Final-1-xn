@@ -8,7 +8,7 @@ We provide 4 models: 1 ViT-g trained from scratch, and 3 ViT-S/B/L models distil
 ## Model Details
 The model takes an image as input and returns a class token and patch tokens.
 
-The embedding dimension is: 
+The embedding dimension is:
 - 384 for ViT-S.
 - 768 for ViT-B.
 - 1024 for ViT-L.
@@ -18,7 +18,7 @@ The models follow a Transformer architecture, with a patch size of 14.
 
 For a 224x224 image, this results in 1 class token + 256 patch tokens.
 
-The models can accept larger images provided the image shapes are multiples of the patch size (14). 
+The models can accept larger images provided the image shapes are multiples of the patch size (14).
 If this condition is not verified, the model will crop to the closest smaller multiple of the patch size.
 
 ### Model Description
@@ -46,7 +46,7 @@ The models can be used without fine-tuning, with downstream classifiers as simpl
 
 ### Downstream Use
 
-It is technically possible to perform fine-tuning on the models, for small gains (we measured +2% on ImageNet-1k classification). 
+It is technically possible to perform fine-tuning on the models, for small gains (we measured +2% on ImageNet-1k classification).
 We recommend keeping this as a very last step and only when necessary, as the features already provide good performance out-of-the-box.
 
 ## Bias, Risks, and Limitations
@@ -76,7 +76,7 @@ dinov2_vitg14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14')
 - **Training data:** LVD-142M (see paper)
 - **Training regime:** fp16 using PyTorch-FSDP mixed-precision.
 
-### Training Procedure 
+### Training Procedure
 
 - **Training objective:**
   - DINO self-distillation loss with multi-crop
@@ -130,45 +130,45 @@ We refer users to the associated paper for the evaluation protocols.
     <td>ViT-S/14</td>
     <td align="right">79.0%</td>
     <td align="right">81.1%</td>
-    <td align="right">70.8%</td> 
-    <td align="right">0.417</td> 
-    <td align="right">0.431</td> 
-    <td align="right">47.2</td> 
-    <td align="right">69.5%</td> 
-    <td align="right">43.2</td> 
+    <td align="right">70.8%</td>
+    <td align="right">0.417</td>
+    <td align="right">0.431</td>
+    <td align="right">47.2</td>
+    <td align="right">69.5%</td>
+    <td align="right">43.2</td>
   </tr>
   <tr>
     <td>ViT-B/14</td>
     <td align="right">82.1%</td>
     <td align="right">84.5%</td>
     <td align="right">74.9%</td>
-    <td align="right">0.362</td> 
-    <td align="right">0.400</td> 
-    <td align="right">51.3</td> 
-    <td align="right">76.3%</td> 
-    <td align="right">49.5</td> 
+    <td align="right">0.362</td>
+    <td align="right">0.400</td>
+    <td align="right">51.3</td>
+    <td align="right">76.3%</td>
+    <td align="right">49.5</td>
   </tr>
   <tr>
     <td>ViT-L/14</td>
     <td align="right">83.5%</td>
     <td align="right">86.3%</td>
     <td align="right">77.6%</td>
-    <td align="right">0.333</td> 
-    <td align="right">0.396</td> 
-    <td align="right">53.1</td> 
-    <td align="right">79.8%</td> 
-    <td align="right">54.0</td> 
+    <td align="right">0.333</td>
+    <td align="right">0.396</td>
+    <td align="right">53.1</td>
+    <td align="right">79.8%</td>
+    <td align="right">54.0</td>
   </tr>
   <tr>
     <td>ViT-g/14</td>
     <td align="right">83.5%</td>
     <td align="right">86.5%</td>
     <td align="right">78.4%</td>
-    <td align="right">0.298</td> 
-    <td align="right">0.362</td> 
-    <td align="right">53.0</td> 
-    <td align="right">81.6%</td> 
-    <td align="right">52.3</td> 
+    <td align="right">0.298</td>
+    <td align="right">0.362</td>
+    <td align="right">53.0</td>
+    <td align="right">81.6%</td>
+    <td align="right">52.3</td>
   </tr>
 </table>
 

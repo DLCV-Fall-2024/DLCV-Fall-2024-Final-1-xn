@@ -1,13 +1,15 @@
-import os
-import time
+import argparse
 import json
+import os
 import random
 import string
-import argparse
-import numpy as np
+import time
 from collections import defaultdict
-from datasets import load_dataset
+
 import google.generativeai as genai
+import numpy as np
+from datasets import load_dataset
+
 from scorer import Scorer
 
 
@@ -19,10 +21,13 @@ def format_prompt(few_shot_path, message, sample_type="general"):
         for sample in os.listdir(os.path.join(few_shot_path, folder)):
             data = json.load(open(os.path.join(few_shot_path, folder, sample)))
             messages += template.format(data["reference"], data["prediction"]) + "\n"
-            messages += "Answer:\n" + data["response"] + "\n\n"     
-    messages += template.format(message["reference"], message["prediction"]) + "\nAnswer:\n"
-    
+            messages += "Answer:\n" + data["response"] + "\n\n"
+    messages += (
+        template.format(message["reference"], message["prediction"]) + "\nAnswer:\n"
+    )
+
     return messages
+
 
 def arguments():
     parser = argparse.ArgumentParser()
@@ -38,26 +43,24 @@ def arguments():
 
 
 if __name__ == "__main__":
-
     args = arguments()
 
     # Load model
     genai.configure(api_key=args.api_key)
     model = genai.GenerativeModel(
         model_name="gemini-1.5-flash-002",
-        system_instruction="You are an impartial judge tasked with evaluating text similarity and relevance of the reference text and autonomous driving AI assistant's predicted text. Be as objective as possible. Do not allow the length of the predicted text to influence your evaluation. After providing your short explanation, you must rate on a scale from 1 to 10 by strictly following this format: \"[[rating]]\", for example: \"Rating: [[10]]\"."
+        system_instruction='You are an impartial judge tasked with evaluating text similarity and relevance of the reference text and autonomous driving AI assistant\'s predicted text. Be as objective as possible. Do not allow the length of the predicted text to influence your evaluation. After providing your short explanation, you must rate on a scale from 1 to 10 by strictly following this format: "[[rating]]", for example: "Rating: [[10]]".',
     )
     generation_config = genai.GenerationConfig(
-        temperature=args.temperature,
-        max_output_tokens=args.max_output_tokens
+        temperature=args.temperature, max_output_tokens=args.max_output_tokens
     )
 
-    # Load dataset  
+    # Load dataset
     reference = load_dataset(args.dataset_name, split=args.split, streaming=True)
     prediction = json.load(open(args.prediction, "r"))
     NLP_HYPOTHESIS = {key: [value.strip()] for key, value in prediction.items()}
     NLP_REFERENCE = {}
-    
+
     # Evaluate
     result = defaultdict(list)
     # save = {}
@@ -70,11 +73,14 @@ if __name__ == "__main__":
             continue
 
         message = {"reference": "", "prediction": prediction[sample_id]}
+        print(data["conversations"])
         message["reference"] = data["conversations"][1]["value"]
         sample_type = (sample_id.split("_")[1]).lower()
         messages = format_prompt(args.few_shot, message, sample_type)
         try:
-            response = model.generate_content(messages, generation_config=generation_config)
+            response = model.generate_content(
+                messages, generation_config=generation_config
+            )
             try:
                 score = int(response.text.split("[[")[-1].split("]]")[0])
             except:
@@ -109,7 +115,7 @@ if __name__ == "__main__":
 
     # NLP metric
     for key, value in total_scores.items():
-        print(f'{key}: {value:.3f}')
+        print(f"{key}: {value:.3f}")
 
     total_score = np.mean(total) * 0.8 + total_scores["Bleu_3"] * 0.2
-    print(f"Total score: {total_score:.3f}") 
+    print(f"Total score: {total_score:.3f}")

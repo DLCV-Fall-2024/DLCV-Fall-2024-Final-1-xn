@@ -7,14 +7,12 @@
 import logging
 from typing import Dict, Optional
 
+import dinov2.distributed as distributed
 import torch
+from dinov2.data import DatasetWithEnumeratedTargets, SamplerType, make_data_loader
+from dinov2.logging import MetricLogger
 from torch import nn
 from torchmetrics import MetricCollection
-
-from dinov2.data import DatasetWithEnumeratedTargets, SamplerType, make_data_loader
-import dinov2.distributed as distributed
-from dinov2.logging import MetricLogger
-
 
 logger = logging.getLogger("dinov2")
 
@@ -80,7 +78,9 @@ def evaluate(
     logger.info(f"Averaged stats: {metric_logger}")
 
     stats = {k: metric.compute() for k, metric in metrics.items()}
-    metric_logger_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    metric_logger_stats = {
+        k: meter.global_avg for k, meter in metric_logger.meters.items()
+    }
     return metric_logger_stats, stats
 
 
@@ -107,11 +107,15 @@ def extract_features(model, dataset, batch_size, num_workers, gather_on_cpu=Fals
         drop_last=False,
         shuffle=False,
     )
-    return extract_features_with_dataloader(model, data_loader, sample_count, gather_on_cpu)
+    return extract_features_with_dataloader(
+        model, data_loader, sample_count, gather_on_cpu
+    )
 
 
 @torch.inference_mode()
-def extract_features_with_dataloader(model, data_loader, sample_count, gather_on_cpu=False):
+def extract_features_with_dataloader(
+    model, data_loader, sample_count, gather_on_cpu=False
+):
     gather_device = torch.device("cpu") if gather_on_cpu else torch.device("cuda")
     metric_logger = MetricLogger(delimiter="  ")
     features, all_labels = None, None
@@ -123,7 +127,9 @@ def extract_features_with_dataloader(model, data_loader, sample_count, gather_on
 
         # init storage feature matrix
         if features is None:
-            features = torch.zeros(sample_count, features_rank.shape[-1], device=gather_device)
+            features = torch.zeros(
+                sample_count, features_rank.shape[-1], device=gather_device
+            )
             labels_shape = list(labels_rank.shape)
             labels_shape[0] = sample_count
             all_labels = torch.full(labels_shape, fill_value=-1, device=gather_device)

@@ -1,58 +1,63 @@
-import os
-import json
 import argparse
-import numpy as np
-from collections import defaultdict
-import warnings
+import json
 import logging
+import os
 import re
+import warnings
+from collections import defaultdict
+
+import numpy as np
 from tqdm import tqdm
 
 # Suppress warnings and logging
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
 import torch
 import transformers
+
 from scorer import Scorer
+
 
 def load_local_data(data_root, split):
     """Load local data from jsonl files"""
     annotations_dir = os.path.join(data_root, "annotations")
     data = []
-    
+
     for task in ["general_perception", "region_perception", "driving_suggestion"]:
         filename = f"{split}_{task}.jsonl"
         filepath = os.path.join(annotations_dir, filename)
-        
+
         if os.path.exists(filepath):
-            with open(filepath, 'r') as f:
+            with open(filepath, "r") as f:
                 for line in f:
                     data.append(json.loads(line))
-    
+
     return data
+
 
 def get_reference_text(data, is_test=False):
     """Safely extract reference text from data in different formats"""
     try:
         if is_test:
             return None
-            
+
         if "conversations" in data and isinstance(data["conversations"], list):
             if len(data["conversations"]) > 1:
                 return data["conversations"][1]["value"]
-        
+
         if "answer" in data:
             return data["answer"]
-        
+
         if "question" in data and "ground_truth" in data:
             return data["ground_truth"]
-            
+
         return None
-        
+
     except Exception as e:
         return None
+
 
 def create_prompt(message, is_test=False):
     """Create evaluation prompt specifically for autonomous driving scene descriptions"""
@@ -64,7 +69,7 @@ def create_prompt(message, is_test=False):
         "3. Relevance: Focus on driving-relevant details\n"
         "Each aspect is equally important for the final score."
     )
-    
+
     if is_test or message["reference"] is None:
         return (
             f"{system_context}\n\n"
@@ -95,6 +100,7 @@ def create_prompt(message, is_test=False):
             "Example: 'Prediction captures main elements but misses some important details. Rating: [[7]]'"
         )
 
+
 def extract_score(text):
     """Extract score from model output with improved parsing"""
     try:
@@ -108,36 +114,34 @@ def extract_score(text):
         pass
     return None, text
 
+
 def process_batch(pipeline, batch_data, args, is_test=False):
     """Process a batch of samples with improved error handling and score printing"""
     prompts = []
     batch_info = []
-    
+
     for sample_id, data, pred in batch_data:
         reference_text = get_reference_text(data, is_test)
-        message = {
-            "reference": reference_text,
-            "prediction": pred
-        }
+        message = {"reference": reference_text, "prediction": pred}
         prompt = create_prompt(message, is_test)
         prompts.append(prompt)
         batch_info.append((sample_id, (sample_id.split("_")[1]).lower()))
-    
+
     try:
         outputs = pipeline(
             prompts,
             max_new_tokens=args.max_output_tokens,
             do_sample=False,
             pad_token_id=pipeline.tokenizer.eos_token_id,
-            return_full_text=False
+            return_full_text=False,
         )
-        
+
         results = []
         evaluations = []
         for output, (sample_id, _) in zip(outputs, batch_info):
             text = output[0]["generated_text"]
             score_result, eval_text = extract_score(text)
-            
+
             if score_result is None:
                 tqdm.write(f"\nWarning: Could not extract valid score for {sample_id}")
                 tqdm.write(f"Model output: {text[:200]}...")
@@ -147,35 +151,41 @@ def process_batch(pipeline, batch_data, args, is_test=False):
                 tqdm.write(f"Score: {score_result}")
                 if args.verbose:
                     tqdm.write(f"Evaluation:\n{eval_text}\n")
-            
+
             results.append(score_result)
             evaluations.append(eval_text)
-        
+
         return list(zip(batch_info, results, evaluations))
-    
+
     except Exception as e:
         tqdm.write(f"Batch processing error: {e}")
         return [(info, 0, "") for info in batch_info]
 
+
 def arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_id", type=str, default="meta-llama/Meta-Llama-3.1-8B-Instruct")
+    parser.add_argument(
+        "--model_id", type=str, default="meta-llama/Meta-Llama-3.1-8B-Instruct"
+    )
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--prediction", type=str, default=None)
     parser.add_argument("--data_root", type=str, default="data")
     parser.add_argument("--split", type=str, default="val")
     parser.add_argument("--max_output_tokens", type=int, default=300)
     parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--verbose", action="store_true", help="Print detailed evaluation text")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Print detailed evaluation text"
+    )
     parser.add_argument("--output", type=str, help="Save detailed results to file")
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = arguments()
     is_test = args.split.lower() == "test"
-    
+
     print(f"Evaluating {'test' if is_test else 'validation'} set...")
-    
+
     # Load model
     print("Loading model...")
     pipeline = transformers.pipeline(
@@ -185,18 +195,18 @@ if __name__ == "__main__":
         device_map="cuda",
         temperature=args.temperature,
     )
-    
+
     # Load data
     print("Loading data...")
     reference_data = load_local_data(args.data_root, args.split)
-    with open(args.prediction, 'r') as f:
+    with open(args.prediction, "r") as f:
         prediction = json.load(f)
-    
+
     # Prepare batches
     batches = []
     current_batch = []
     total_samples = 0
-    
+
     for data in reference_data:
         sample_id = data["id"]
         if sample_id in prediction:
@@ -205,36 +215,36 @@ if __name__ == "__main__":
             if len(current_batch) >= args.batch_size:
                 batches.append(current_batch)
                 current_batch = []
-    
+
     if current_batch:
         batches.append(current_batch)
-    
+
     # Process batches
     print(f"\nProcessing {total_samples} samples...")
     result = defaultdict(list)
     detailed_results = defaultdict(dict)
-    
+
     with tqdm(total=total_samples, desc="Evaluating") as pbar:
         for batch in batches:
             batch_results = process_batch(pipeline, batch, args, is_test)
-            
+
             for (sample_id, sample_type), score, evaluation in batch_results:
                 result[sample_type].append(score)
                 detailed_results[sample_type][sample_id] = {
                     "score": score,
-                    "evaluation": evaluation
+                    "evaluation": evaluation,
                 }
                 pbar.update(1)
-    
+
     # Save detailed results if requested
     if args.output:
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(detailed_results, f, indent=2)
-    
+
     # Calculate and display results
     print("\nFinal Results:")
     total = []
-    
+
     for sample_type, scores in result.items():
         if scores:
             valid_scores = [s for s in scores if s > 0]
@@ -246,23 +256,25 @@ if __name__ == "__main__":
                 total.append(avg_score)
             else:
                 print(f"\nWarning: No valid scores for {sample_type}")
-    
+
     if total:
         llm_score = np.mean(total)
         print(f"\nOverall LLM score: {llm_score:.3f}")
-        
+
         if not is_test:
             print("\nCalculating BLEU scores...")
             NLP_HYPOTHESIS = {key: [value.strip()] for key, value in prediction.items()}
-            NLP_REFERENCE = {sample["id"]: [get_reference_text(sample)] 
-                           for sample in reference_data 
-                           if get_reference_text(sample) is not None}
-            
+            NLP_REFERENCE = {
+                sample["id"]: [get_reference_text(sample)]
+                for sample in reference_data
+                if get_reference_text(sample) is not None
+            }
+
             coco_eval = Scorer(NLP_HYPOTHESIS, NLP_REFERENCE)
             total_scores = coco_eval.evaluate()
 
             for key, value in total_scores.items():
-                print(f'{key}: {value:.3f}')
+                print(f"{key}: {value:.3f}")
 
             total_score = llm_score * 0.8 + total_scores["Bleu_3"] * 0.2
             print(f"\nFinal combined score: {total_score:.3f}")

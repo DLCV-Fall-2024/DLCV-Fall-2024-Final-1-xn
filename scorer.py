@@ -1,11 +1,11 @@
-from pycocoevalcap.spice.spice import Spice
 from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.meteor.meteor import Meteor
+from pycocoevalcap.spice.spice import Spice
 
 
 class Scorer:
     def __init__(self, pred, gt):
-        self.pred = pred 
+        self.pred = pred
         self.gt = gt
         self.scorers = [
             (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),

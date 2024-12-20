@@ -1,20 +1,26 @@
-import torch
-from torchvision import transforms
-from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration, AdamW, get_linear_schedule_with_warmup, BitsAndBytesConfig
-from peft import get_peft_model, LoraConfig
-import gc
-import os
-from tqdm import tqdm
-import numpy as np
-import json
-from PIL import Image
-from torch.utils.data import Dataset, DataLoader, ConcatDataset
-import time
 import argparse
+import gc
+import json
+import os
+import time
 import traceback
 
 import transformers
 from liger_kernel.transformers import apply_liger_kernel_to_llama
+import numpy as np
+import torch
+from peft import LoraConfig, get_peft_model
+from PIL import Image
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
+from torchvision import transforms
+from tqdm import tqdm
+from transformers import (
+    AdamW,
+    BitsAndBytesConfig,
+    LlavaNextForConditionalGeneration,
+    LlavaNextProcessor,
+    get_linear_schedule_with_warmup,
+)
 
 GRADIENT_ACCUMULATION_STEPS = 4
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -35,14 +41,15 @@ SAVE_INTERVAL = 1000
 torch.cuda.set_per_process_memory_fraction(0.95)
 torch.backends.cuda.matmul.allow_tf32 = True
 
+
 class DrivingDataset(Dataset):
     def __init__(self, annotations_file, root_dir, task_type):
         self.root_dir = root_dir
         self.task_type = task_type
         self.samples = []
-        
+
         try:
-            with open(annotations_file, 'r') as f:
+            with open(annotations_file, "r") as f:
                 for line in f:
                     data = json.loads(line)
                     self.samples.append(data)
@@ -55,29 +62,25 @@ class DrivingDataset(Dataset):
     def __getitem__(self, idx):
         try:
             sample = self.samples[idx]
-            image_path = sample['image']
-            if self.root_dir.endswith('data') or self.root_dir.endswith('data/'):
+            image_path = sample["image"]
+            if self.root_dir.endswith("data") or self.root_dir.endswith("data/"):
                 image_path = os.path.join(os.path.dirname(self.root_dir), image_path)
 
             # Load and verify image
             image = Image.open(image_path)
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-                
-            conversations = sample['conversations']
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+
+            conversations = sample["conversations"]
             label = ""
             for convo in conversations:
-                if convo['from'].lower() == 'gpt':
-                    label = convo['value']
+                if convo["from"].lower() == "gpt":
+                    label = convo["value"]
                     break
 
             prompt = self.get_prompt(self.task_type)
-            
-            return {
-                "image": image,
-                "prompt": prompt,
-                "label": label
-            }
+
+            return {"image": image, "prompt": prompt, "label": label}
         except Exception as e:
             print(f"Error loading sample {idx}: {str(e)}")
             return None
@@ -107,9 +110,10 @@ class DrivingDataset(Dataset):
                 "providing specific and helpful driving suggestions. The expert receives an image of "
                 "traffic captured from the perspective of the ego car. USER: <image>\n"
                 "Please provide driving suggestions for the ego car based on the current scene. EXPERT:"
-            )
+            ),
         }
         return prompts.get(task_type, "")
+
 
 class LocalDataProcessor:
     def __init__(self):
@@ -121,30 +125,32 @@ class LocalDataProcessor:
         try:
             torch.cuda.empty_cache()
             gc.collect()
-            
+
             if torch.cuda.is_available():
                 print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
-                print(f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.1f}MB")
+                print(
+                    f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.1f}MB"
+                )
 
             self.processor = LlavaNextProcessor.from_pretrained(MODEL_ID)
 
             self.processor.patch_size = 14
             self.processor.vision_feature_select_strategy = "full"
-            
+
             # Configure 4-bit quantization
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
-                bnb_4bit_compute_dtype=torch.float16
+                bnb_4bit_compute_dtype=torch.float16,
             )
-            
+
             self.model = LlavaNextForConditionalGeneration.from_pretrained(
                 MODEL_ID,
                 quantization_config=bnb_config,
                 torch_dtype=torch.float16,
                 device_map="auto",
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=True,
             )
 
             # Apply Liger Kernel
@@ -152,17 +158,17 @@ class LocalDataProcessor:
 
             # LoRA Configuration
             lora_config = LoraConfig(
-                r=8,  
+                r=8,
                 lora_alpha=32,
                 target_modules=["q_proj"],  # Reduced target modules
                 lora_dropout=0.1,
                 bias="none",
-                task_type="CAUSAL_LM"
+                task_type="CAUSAL_LM",
             )
 
             self.model = get_peft_model(self.model, lora_config)
             self.model.print_trainable_parameters()
-            
+
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             print(f"Using device: {self.device}")
             print("Model loaded successfully")
@@ -176,66 +182,68 @@ class LocalDataProcessor:
             valid_samples = [item for item in batch if item is not None]
             if not valid_samples:
                 return None
-                
-            images = [item['image'] for item in valid_samples]
-            prompts = [item['prompt'] for item in valid_samples]
-            labels = [item['label'] for item in valid_samples]
-            
+
+            images = [item["image"] for item in valid_samples]
+            prompts = [item["prompt"] for item in valid_samples]
+            labels = [item["label"] for item in valid_samples]
+
             # Process images with explicit type casting
             vision_inputs = self.processor.image_processor(
                 images,
                 return_tensors="pt",
                 do_resize=True,
-                size={"height": 224, "width": 224}
+                size={"height": 224, "width": 224},
             )
-            
+
             if vision_inputs.pixel_values is None:
                 return None
-                
+
             # Ensure pixel values are float32 and in range [0, 1]
             pixel_values = vision_inputs.pixel_values.to(torch.float32)
             if pixel_values.max() > 1.0:
                 pixel_values = pixel_values / 255.0
-                
+
             # Process text with max length limit
             text_inputs = self.processor.tokenizer(
                 prompts,
                 return_tensors="pt",
-                padding='max_length',
+                padding="max_length",
                 truncation=True,
-                max_length=512  # Explicit max length
+                max_length=512,  # Explicit max length
             )
-            
+
             # Create inputs with explicit types
             inputs = {
                 "input_ids": text_inputs["input_ids"].to(torch.long),
                 "attention_mask": text_inputs["attention_mask"].to(torch.long),
                 "pixel_values": pixel_values,
-                "image_sizes": torch.tensor([[224, 224]] * len(valid_samples), dtype=torch.long)
+                "image_sizes": torch.tensor(
+                    [[224, 224]] * len(valid_samples), dtype=torch.long
+                ),
             }
-            
+
             # Process labels with same max length
             label_tokens = self.processor.tokenizer(
                 labels,
                 return_tensors="pt",
-                padding='max_length',
+                padding="max_length",
                 truncation=True,
-                max_length=512  # Same max length as inputs
+                max_length=512,  # Same max length as inputs
             )
-            
+
             # Create labels tensor with padding
             labels_tensor = label_tokens["input_ids"].clone().to(torch.long)
             labels_tensor[label_tokens["attention_mask"] == 0] = -100
             inputs["labels"] = labels_tensor
-            
+
             # Debug info
-            '''for key, tensor in inputs.items():
+            """for key, tensor in inputs.items():
                 print(f"Debug - {key} shape: {tensor.shape}, dtype: {tensor.dtype}, device: {tensor.device}")
                 if torch.isnan(tensor).any():
                     print(f"Warning: NaN values found in {key}")
                 if torch.isinf(tensor).any():
-                    print(f"Warning: Inf values found in {key}")'''
-            
+                    print(f"Warning: Inf values found in {key}")"""
+
             return inputs
 
         except Exception as e:
@@ -252,13 +260,13 @@ class LocalDataProcessor:
         train_tasks = [
             ("general", "train_general_perception.jsonl"),
             ("region", "train_region_perception.jsonl"),
-            ("driving", "train_driving_suggestion.jsonl")
+            ("driving", "train_driving_suggestion.jsonl"),
         ]
 
         val_tasks = [
             ("general", "val_general_perception.jsonl"),
             ("region", "val_region_perception.jsonl"),
-            ("driving", "val_driving_suggestion.jsonl")
+            ("driving", "val_driving_suggestion.jsonl"),
         ]
 
         # Load training datasets
@@ -272,12 +280,12 @@ class LocalDataProcessor:
         print(f"Total training samples: {len(combined_train_dataset)}")
 
         train_loader = DataLoader(
-            combined_train_dataset, 
-            batch_size=BATCH_SIZE, 
-            shuffle=True, 
+            combined_train_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
             num_workers=2,  # Reduced for stability
             pin_memory=False,  # Disabled to prevent CUDA issues
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
         )
 
         # Load validation datasets
@@ -291,27 +299,22 @@ class LocalDataProcessor:
         print(f"Total validation samples: {len(combined_val_dataset)}")
 
         val_loader = DataLoader(
-            combined_val_dataset, 
-            batch_size=BATCH_SIZE, 
-            shuffle=False, 
+            combined_val_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
             num_workers=2,
             pin_memory=False,
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
         )
 
         # Initialize optimizer and scheduler
         optimizer = AdamW(
-            self.model.parameters(),
-            lr=LEARNING_RATE,
-            weight_decay=0.01,
-            eps=1e-8
+            self.model.parameters(), lr=LEARNING_RATE, weight_decay=0.01, eps=1e-8
         )
-        
+
         total_steps = len(train_loader) * EPOCHS
         scheduler = get_linear_schedule_with_warmup(
-            optimizer, 
-            num_warmup_steps=WARMUP_STEPS, 
-            num_training_steps=total_steps
+            optimizer, num_warmup_steps=WARMUP_STEPS, num_training_steps=total_steps
         )
 
         self.model.train()
@@ -340,14 +343,28 @@ class LocalDataProcessor:
                         if isinstance(v, torch.Tensor):
                             try:
                                 if k == "pixel_values":
-                                    tensor = v.to(device=self.device, dtype=torch.float16, non_blocking=True)
+                                    tensor = v.to(
+                                        device=self.device,
+                                        dtype=torch.float16,
+                                        non_blocking=True,
+                                    )
                                 elif k == "labels":
                                     # Ensure labels are valid indices
-                                    tensor = v.clamp(min=-100, max=self.model.config.vocab_size-1)
-                                    tensor = tensor.to(device=self.device, dtype=torch.long, non_blocking=True)
+                                    tensor = v.clamp(
+                                        min=-100, max=self.model.config.vocab_size - 1
+                                    )
+                                    tensor = tensor.to(
+                                        device=self.device,
+                                        dtype=torch.long,
+                                        non_blocking=True,
+                                    )
                                 else:
-                                    tensor = v.to(device=self.device, dtype=torch.long, non_blocking=True)
-                                
+                                    tensor = v.to(
+                                        device=self.device,
+                                        dtype=torch.long,
+                                        non_blocking=True,
+                                    )
+
                                 # Verify tensor
                                 if torch.isnan(tensor).any():
                                     print(f"Warning: NaN values in {k}")
@@ -355,9 +372,9 @@ class LocalDataProcessor:
                                 if torch.isinf(tensor).any():
                                     print(f"Warning: Inf values in {k}")
                                     continue
-                                    
+
                                 cuda_batch[k] = tensor
-                                
+
                             except Exception as e:
                                 print(f"Error moving tensor {k} to GPU: {str(e)}")
                                 raise
@@ -366,12 +383,12 @@ class LocalDataProcessor:
                     try:
                         outputs = self.model(**cuda_batch)
                         loss = outputs.loss
-                        
+
                         # Check loss validity
                         if torch.isnan(loss) or torch.isinf(loss):
                             print(f"Invalid loss value: {loss.item()}")
                             continue
-                            
+
                         # Scale loss for gradient accumulation
                         loss = loss / GRADIENT_ACCUMULATION_STEPS
                         loss.backward()
@@ -383,8 +400,10 @@ class LocalDataProcessor:
                     # Gradient accumulation step
                     if (step + 1) % GRADIENT_ACCUMULATION_STEPS == 0:
                         # Clip gradients
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                        
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), max_norm=1.0
+                        )
+
                         optimizer.step()
                         scheduler.step()
                         optimizer.zero_grad()
@@ -392,13 +411,15 @@ class LocalDataProcessor:
                     # Update metrics
                     epoch_train_loss += loss.item() * GRADIENT_ACCUMULATION_STEPS
                     valid_steps += 1
-                    
+
                     # Update progress bar
-                    progress_bar.set_postfix({
-                        "loss": loss.item() * GRADIENT_ACCUMULATION_STEPS,
-                        "lr": scheduler.get_last_lr()[0],
-                        "valid_steps": valid_steps
-                    })
+                    progress_bar.set_postfix(
+                        {
+                            "loss": loss.item() * GRADIENT_ACCUMULATION_STEPS,
+                            "lr": scheduler.get_last_lr()[0],
+                            "valid_steps": valid_steps,
+                        }
+                    )
 
                     # Save checkpoint
                     if (step + 1) % SAVE_INTERVAL == 0:
@@ -412,25 +433,27 @@ class LocalDataProcessor:
             # End of epoch processing
             if valid_steps > 0:
                 avg_train_loss = epoch_train_loss / valid_steps
-                print(f"Epoch {epoch + 1} - Average Training Loss: {avg_train_loss:.4f}")
-                
+                print(
+                    f"Epoch {epoch + 1} - Average Training Loss: {avg_train_loss:.4f}"
+                )
+
                 # Validation
                 try:
                     val_loss = self.evaluate_model(val_loader)
                     print(f"Validation Loss: {val_loss:.4f}")
                 except Exception as e:
                     print(f"Error during validation: {str(e)}")
-                
+
                 # Save epoch checkpoint
                 self.save_lora_weights(epoch + 1)
-                
+
                 # Clear cache between epochs
                 torch.cuda.empty_cache()
                 gc.collect()
 
         # Save final model
         try:
-            self.save_lora_weights('final')
+            self.save_lora_weights("final")
             print("Training complete!")
         except Exception as e:
             print(f"Error saving final weights: {str(e)}")
@@ -447,7 +470,11 @@ class LocalDataProcessor:
                     if batch is None:
                         continue
 
-                    batch = {k: v.to(self.device) for k, v in batch.items() if isinstance(v, torch.Tensor)}
+                    batch = {
+                        k: v.to(self.device)
+                        for k, v in batch.items()
+                        if isinstance(v, torch.Tensor)
+                    }
                     outputs = self.model(**batch)
                     loss = outputs.loss
                     total_val_loss += loss.item()
@@ -458,7 +485,7 @@ class LocalDataProcessor:
                     continue
 
         self.model.train()
-        return total_val_loss / valid_steps if valid_steps > 0 else float('inf')
+        return total_val_loss / valid_steps if valid_steps > 0 else float("inf")
 
     def save_lora_weights(self, epoch, step=None):
         try:
@@ -471,10 +498,18 @@ class LocalDataProcessor:
         except Exception as e:
             print(f"Error saving LoRA weights: {e}")
 
+
 def main():
     try:
-        parser = argparse.ArgumentParser(description='Train the model with a specified data root directory')
-        parser.add_argument('--data_root', type=str, default=DATA_ROOT, help='Path to the data root directory')
+        parser = argparse.ArgumentParser(
+            description="Train the model with a specified data root directory"
+        )
+        parser.add_argument(
+            "--data_root",
+            type=str,
+            default=DATA_ROOT,
+            help="Path to the data root directory",
+        )
         args = parser.parse_args()
 
         processor = LocalDataProcessor()
@@ -483,6 +518,7 @@ def main():
     except Exception as e:
         print(f"Error in main execution: {e}")
         raise
+
 
 if __name__ == "__main__":
     main()
