@@ -5,6 +5,8 @@ import os
 import time
 import traceback
 
+import transformers
+from liger_kernel.transformers import apply_liger_kernel_to_llama
 import numpy as np
 import torch
 from peft import LoraConfig, get_peft_model
@@ -29,7 +31,7 @@ OUTPUT_DIR = "fine_tuned_results"
 MODEL_ID = "llava-hf/llava-v1.6-vicuna-7b-hf"
 DATA_ROOT = "data"
 DEBUG = False
-BATCH_SIZE = 5
+BATCH_SIZE = 1
 EPOCHS = 3
 LEARNING_RATE = 2e-5
 WARMUP_STEPS = 500
@@ -132,6 +134,9 @@ class LocalDataProcessor:
 
             self.processor = LlavaNextProcessor.from_pretrained(MODEL_ID)
 
+            self.processor.patch_size = 14
+            self.processor.vision_feature_select_strategy = "full"
+
             # Configure 4-bit quantization
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
@@ -147,6 +152,9 @@ class LocalDataProcessor:
                 device_map="auto",
                 low_cpu_mem_usage=True,
             )
+
+            # Apply Liger Kernel
+            apply_liger_kernel_to_llama(self.model)
 
             # LoRA Configuration
             lora_config = LoraConfig(
