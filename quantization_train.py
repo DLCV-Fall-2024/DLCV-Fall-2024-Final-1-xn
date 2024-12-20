@@ -2,17 +2,13 @@ import argparse
 import gc
 import json
 import os
-import time
 import traceback
 
-import transformers
-from liger_kernel.transformers import apply_liger_kernel_to_llama
-import numpy as np
 import torch
+from liger_kernel.transformers import apply_liger_kernel_to_llama
 from peft import LoraConfig, get_peft_model
 from PIL import Image
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
-from torchvision import transforms
 from tqdm import tqdm
 from transformers import (
     AdamW,
@@ -32,7 +28,7 @@ MODEL_ID = "llava-hf/llava-v1.6-vicuna-7b-hf"
 DATA_ROOT = "data"
 DEBUG = False
 BATCH_SIZE = 1
-EPOCHS = 3
+EPOCHS = 5
 LEARNING_RATE = 2e-5
 WARMUP_STEPS = 500
 SAVE_INTERVAL = 1000
@@ -115,7 +111,7 @@ class DrivingDataset(Dataset):
         return prompts.get(task_type, "")
 
 
-class LocalDataProcessor:
+class Trainer:
     def __init__(self):
         self.setup_model()
         os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -164,6 +160,7 @@ class LocalDataProcessor:
                 lora_dropout=0.1,
                 bias="none",
                 task_type="CAUSAL_LM",
+                use_dora=True,
             )
 
             self.model = get_peft_model(self.model, lora_config)
@@ -251,7 +248,7 @@ class LocalDataProcessor:
             traceback.print_exc()
             return None
 
-    def train_model(self, data_root=DATA_ROOT):
+    def train(self, data_root=DATA_ROOT):
         """Complete training loop with improved error handling and debugging"""
         print("Starting training process...")
         print(f"Using data root: {data_root}")
@@ -512,8 +509,8 @@ def main():
         )
         args = parser.parse_args()
 
-        processor = LocalDataProcessor()
-        processor.train_model(data_root=args.data_root)
+        processor = Trainer()
+        processor.train(data_root=args.data_root)
         print("\nTraining and Evaluation complete!")
     except Exception as e:
         print(f"Error in main execution: {e}")
