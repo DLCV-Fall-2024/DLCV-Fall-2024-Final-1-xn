@@ -4,13 +4,43 @@ import torch
 from datasets import load_dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
     BitsAndBytesConfig,
     DataCollatorForLanguageModeling,
+    LlavaNextForConditionalGeneration,
+    LlavaProcessor,
     Trainer,
     TrainingArguments,
 )
+
+
+def get_prompt(task_type):
+    prompts = {
+        "general": (
+            "A chat between a curious human and an autonomous driving expert, specializing in "
+            "recognizing traffic scenes and making detailed explanations. The expert receives an "
+            "image of traffic captured from the perspective of the ego car. USER: <image>\n "
+            "Focus on objects influencing the ego car's driving behavior: vehicles (cars, trucks, "
+            "buses, braking lights, etc.), vulnerable road users (pedestrians, cyclists, motorcyclists), "
+            "traffic signs (no parking, warning, directional, etc.), traffic lights (red, green, yellow), "
+            "traffic cones, barriers, miscellaneous(debris, dustbin, animals, etc.). You must not "
+            "discuss any objects beyond the seven categories above. Please describe each object's "
+            "color, position, status, implication, responses, and how they influence ego car. EXPERT:"
+        ),
+        "region": (
+            "A chat between a curious human and an autonomous driving expert, specializing in "
+            "recognizing traffic scenes and making detailed explanations. The expert receives an "
+            "image of traffic captured from the perspective of the ego car. USER: <image>\n"
+            "Please describe the object inside the red rectangle in the image and explain why it "
+            "affects ego car driving. EXPERT:"
+        ),
+        "driving": (
+            "A chat between a curious human and an autonomous driving expert, specializing in "
+            "providing specific and helpful driving suggestions. The expert receives an image of "
+            "traffic captured from the perspective of the ego car. USER: <image>\n"
+            "Please provide driving suggestions for the ego car based on the current scene. EXPERT:"
+        ),
+    }
+    return prompts.get(task_type, "")
 
 
 def train_model(
@@ -42,11 +72,11 @@ def train_model(
     print(f"Using device: {device}")
 
     # load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(base_model, token=hf_token)
+    processor = LlavaProcessor.from_pretrained(base_model, token=hf_token)
 
-    # QDoRA (quantized dora): IF YOU WANT TO QUANTIZE THE MODEL
+    # QDoRA (quantized dora): IF YOU WANNA QUANTIZE THE MODEL
     if quantize:
-        model = AutoModelForCausalLM.from_pretrained(
+        model = LlavaNextForConditionalGeneration.from_pretrained(
             base_model,
             token=hf_token,
             quantization_config=BitsAndBytesConfig(
@@ -63,25 +93,28 @@ def train_model(
         # setup for quantized training
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     else:
-        model = AutoModelForCausalLM.from_pretrained(base_model, token=hf_token)
-    # LoRa config for the PEFT model
+        model = LlavaNextForConditionalGeneration.from_pretrained(
+            base_model, token=hf_token
+        )
+
+    if lora_target_modules:
+        target_modules_list = lora_target_modules.split(",")
+    else:
+        target_modules_list = [
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ]
+
     lora_config = LoraConfig(
-        use_dora=use_dora,  # to use Dora OR compare to Lora just set the --use_dora
-        r=lora_r,  # Rank of matrix
+        use_dora=use_dora,
+        r=lora_r,
         lora_alpha=lora_alpha,
-        target_modules=(
-            lora_target_modules.split(",")
-            if lora_target_modules
-            else [
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "o_proj",
-                "gate_proj",
-                "up_proj",
-                "down_proj",
-            ]
-        ),
+        target_modules=target_modules_list,
         lora_dropout=lora_dropout,
         bias="none",
     )
@@ -90,21 +123,27 @@ def train_model(
     model = get_peft_model(model, lora_config)
 
     model.to(device)  # MODEL TO GPU/CUDA
-    tokenizer.pad_token = tokenizer.eos_token
 
     # Load the dataset
     dataset = load_dataset(data_path)
 
+    def format_conversations(examples):
+        return [
+            f"Human: <image>\n{get_prompt(examples['id'][i].split('_')[1])}\nAssistant: {examples['conversations'][i][1]['value']}"
+            for i in range(len(examples["id"]))
+        ]
+
     def tokenize_function(examples):
-        inputs = tokenizer(
-            examples["text"],
-            padding="max_length",
+        text_input = format_conversations(examples)
+        inputs = processor(
+            text=text_input,
+            images=examples["image"],
             truncation=True,
-            max_length=cutoff_len,
+            max_length=512,
+            padding="max_length",
+            return_tensors="pt",
         )
-        inputs["labels"] = inputs[
-            "input_ids"
-        ].copy()  # setting labels for a language modeling task
+        inputs["labels"] = inputs["input_ids"].clone()
         return inputs
 
     # Tokenize the dataset and prepare for training
@@ -112,8 +151,11 @@ def train_model(
         tokenize_function, batched=True, remove_columns=dataset["train"].column_names
     )
 
-    # Data collator to dynamically pad the batched examples
-    data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=processor,
+        mlm=False,
+        return_tensors="pt",
+    )
 
     # Define training arguments
     training_args = TrainingArguments(
@@ -157,31 +199,16 @@ def train_model(
 
     # Save the model and tokenizer locally
     model.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
+    processor.save_pretrained(output_dir)
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Fine-tune LLaMA with DoRA and PEFT")
-    parser.add_argument(
-        "--base_model",
-        type=str,
-        default="llava-hf/llava-v1.6-vicuna-7b-hf",
-        help="Base model path or name",
-    )
-    parser.add_argument(
-        "--data_path",
-        type=str,
-        default="ntudlcv/dlcv_2024_final1",
-        help="Dataset path or name",
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="fine_tuned_results",
-        help="Output directory for the fine-tuned model",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base_model", type=str, default="llava-hf/llava-1.5-7b-hf")
+    parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
+    parser.add_argument("--output_dir", type=str, default="fine_tuned_llava")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
     parser.add_argument(
         "--num_epochs", type=int, default=5, help="Number of training epochs"
@@ -190,10 +217,10 @@ if __name__ == "__main__":
         "--learning_rate", type=float, default=3e-4, help="Learning rate"
     )
     parser.add_argument(
-        "--cutoff_len", type=int, default=512, help="Cutoff length for tokenization"
+        "--cutoff_len", type=int, default=300, help="Cutoff length for tokenization"
     )
     parser.add_argument(
-        "--val_set_size", type=int, default=500, help="Validation set size"
+        "--val_set_size", type=int, default=8716, help="Validation set size"
     )
     parser.add_argument("--use_dora", action="store_true", help="Apply Dora")
     parser.add_argument("--quantize", action="store_true", help="Use quantization")
@@ -218,7 +245,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hub_model_id",
         type=str,
-        default="fine_tuned_llama",
+        default="path/to/repo",
         help="Repository name to push the model on the Hugging Face Hub",
     )
     parser.add_argument(
@@ -226,6 +253,7 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to push the model to Hugging Face Hub",
     )
+
     args = parser.parse_args()
     train_model(
         base_model=args.base_model,
