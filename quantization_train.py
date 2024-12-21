@@ -398,7 +398,7 @@ class Trainer:
                     #             print(f"Error moving tensor {k} to GPU: {str(e)}")
                     #             raise
 
-                     try:
+                    try:
                         batch_size = len(batch)
                         valid_samples = [item for item in batch if item is not None]
                         if not valid_samples:
