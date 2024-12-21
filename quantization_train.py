@@ -152,11 +152,30 @@ class Trainer:
             # Apply Liger Kernel
             apply_liger_kernel_to_llama(self.model)
 
+            # Find all linear layer names except multimodal layers.
+            def find_all_linear_names(model):
+                """Find all linear layer names except multimodal layers."""
+                lora_module_names = set()
+                multimodal_keywords = ["mm_projector", "vision_tower", "vision_resampler"]
+
+                for name, module in model.named_modules():
+                    if isinstance(module, torch.nn.Linear):
+                        # Skip multimodal layers
+                        if any(keyword in name for keyword in multimodal_keywords):
+                            continue
+                        # Get the last part of the name (or full name if no dots)
+                        names = name.split(".")
+                        lora_module_names.add(
+                            names[0] if len(names) == 1 else names[-1]
+                        )
+
+                return list(lora_module_names)
+
             # LoRA Configuration
             lora_config = LoraConfig(
-                r=8,
-                lora_alpha=32,
-                target_modules=["q_proj"],  # Reduced target modules
+                r=64,
+                lora_alpha=128,
+                target_modules=find_all_linear_names(self.model),
                 lora_dropout=0.1,
                 bias="none",
                 task_type="CAUSAL_LM",
@@ -248,6 +267,9 @@ class Trainer:
             traceback.print_exc()
             return None
 
+    def custom_collate_fn(self, batch):
+        return zip(*batch)
+
     def train(self, data_root=DATA_ROOT):
         """Complete training loop with improved error handling and debugging"""
         print("Starting training process...")
@@ -282,7 +304,7 @@ class Trainer:
             shuffle=True,
             num_workers=2,  # Reduced for stability
             pin_memory=False,  # Disabled to prevent CUDA issues
-            collate_fn=self.collate_fn,
+            collate_fn=self.custom_collate_fn,
         )
 
         # Load validation datasets
@@ -301,7 +323,7 @@ class Trainer:
             shuffle=False,
             num_workers=2,
             pin_memory=False,
-            collate_fn=self.collate_fn,
+            collate_fn=self.custom_collate_fn,
         )
 
         # Initialize optimizer and scheduler
