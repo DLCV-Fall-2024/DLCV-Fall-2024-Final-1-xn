@@ -8,10 +8,10 @@ import torch
 from liger_kernel.transformers import apply_liger_kernel_to_llama
 from peft import LoraConfig, get_peft_model
 from PIL import Image
+from torch.optim import AdamW
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from tqdm import tqdm
 from transformers import (
-    AdamW,
     BitsAndBytesConfig,
     LlavaNextForConditionalGeneration,
     LlavaNextProcessor,
@@ -22,7 +22,7 @@ GRADIENT_ACCUMULATION_STEPS = 4
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
 # Configuration
-MAX_TOKEN = 150
+MAX_TOKEN = 300
 OUTPUT_DIR = "fine_tuned_results"
 MODEL_ID = "llava-hf/llava-v1.6-vicuna-7b-hf"
 DATA_ROOT = "data"
@@ -113,10 +113,10 @@ class DrivingDataset(Dataset):
 
 class Trainer:
     def __init__(self):
-        self.setup_model()
+        self.setup()
         os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    def setup_model(self):
+    def setup(self):
         print("Setting up model...")
         try:
             torch.cuda.empty_cache()
