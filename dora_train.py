@@ -128,7 +128,9 @@ def train_model(
     model.to(device)  # MODEL TO GPU/CUDA
 
     # Load the dataset
-    dataset = load_dataset(data_path, split=["train", "val"])
+    dataset = load_dataset(data_path)
+    # test set will cause error during mapping because it has no labels
+    del dataset["test"]
 
     def format_conversations(examples):
         return [
