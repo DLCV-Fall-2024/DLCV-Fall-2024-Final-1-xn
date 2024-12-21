@@ -1,3 +1,4 @@
+import argparse
 import gc
 import json
 import os
@@ -166,7 +167,8 @@ class LocalDataProcessor:
             print(f"Error processing example {example['id']}: {e}")
             return None
 
-    def process_all_tasks(self):
+    def process_all_tasks(self, data_root=DATA_ROOT):
+        print("Using data root:", data_root)
         """Process all tasks with correct filenames"""
         # Task mapping to correct filenames
         tasks = [
@@ -177,7 +179,7 @@ class LocalDataProcessor:
 
         for task_type, filename in tasks:
             print(f"\nProcessing {task_type} task...")
-            data_file = os.path.join(DATA_ROOT, "annotations", f"test_{filename}.jsonl")
+            data_file = os.path.join(data_root, "annotations", f"test_{filename}.jsonl")
 
             try:
                 with open(data_file, "r") as f:
@@ -231,8 +233,18 @@ class LocalDataProcessor:
 
 def main():
     try:
+        parser = argparse.ArgumentParser(
+            description="Train the model with a specified data root directory"
+        )
+        parser.add_argument(
+            "--data_root",
+            type=str,
+            default=DATA_ROOT,
+            help="Path to the data root directory",
+        )
+        args = parser.parse_args()
         processor = LocalDataProcessor()
-        processor.process_all_tasks()
+        processor.process_all_tasks(data_root=args.data_root)
         print("\nInference complete!")
     except Exception as e:
         print(f"Error in main execution: {e}")
