@@ -268,7 +268,15 @@ class Trainer:
             return None
 
     def custom_collate_fn(self, batch):
-        return zip(*batch)
+        # Remove None values and keep the dictionary structure
+        valid_samples = [item for item in batch if item is not None]
+        if not valid_samples:
+            return None
+        return {
+            'image': [item['image'] for item in valid_samples],
+            'prompt': [item['prompt'] for item in valid_samples],
+            'label': [item['label'] for item in valid_samples]
+        }
 
     def train(self, data_root=DATA_ROOT):
         """Complete training loop with improved error handling and debugging"""
@@ -351,74 +359,22 @@ class Trainer:
                         print(f"Skipping step {step}: batch is None")
                         continue
 
-                    # Clear cache before processing batch
-                    if step % 10 == 0:
-                        torch.cuda.empty_cache()
-                        gc.collect()
+                    batch_size = len(batch['image'])
+                    template = 'USER: {} EXPERT: {}</s>'
+                    text = [template.format(prompt, label) 
+                           for prompt, label in zip(batch['prompt'], batch['label'])]
 
-                    # # Move batch to GPU with careful type handling
-                    # cuda_batch = {}
-                    # for k, v in batch.items():
-                    #     if isinstance(v, torch.Tensor):
-                    #         try:
-                    #             if k == "pixel_values":
-                    #                 tensor = v.to(
-                    #                     device=self.device,
-                    #                     dtype=torch.float16,
-                    #                     non_blocking=True,
-                    #                 )
-                    #             elif k == "labels":
-                    #                 # Ensure labels are valid indices
-                    #                 tensor = v.clamp(
-                    #                     min=-100, max=self.model.config.vocab_size - 1
-                    #                 )
-                    #                 tensor = tensor.to(
-                    #                     device=self.device,
-                    #                     dtype=torch.long,
-                    #                     non_blocking=True,
-                    #                 )
-                    #             else:
-                    #                 tensor = v.to(
-                    #                     device=self.device,
-                    #                     dtype=torch.long,
-                    #                     non_blocking=True,
-                    #                 )
-
-                    #             # Verify tensor
-                    #             if torch.isnan(tensor).any():
-                    #                 print(f"Warning: NaN values in {k}")
-                    #                 continue
-                    #             if torch.isinf(tensor).any():
-                    #                 print(f"Warning: Inf values in {k}")
-                    #                 continue
-
-                    #             cuda_batch[k] = tensor
-
-                    #         except Exception as e:
-                    #             print(f"Error moving tensor {k} to GPU: {str(e)}")
-                    #             raise
-
-                    try:
-
-                        valid_samples = [item for item in batch if item is not None]
-                        batch_size = len(valid_samples)
-                        if not valid_samples:
-                            return None
-
-                        images = [item["image"] for item in valid_samples]
-                        prompts = [item["prompt"] for item in valid_samples]
-                        labels = [item["label"] for item in valid_samples]
-
-                        template = 'USER: {} EXPERT: {}</s>'
-                        text = [template.format(prompt, label) for prompt, label in zip(prompts, labels)]
-
-                        inputs = processor(images=images, text=text, padding=True, return_tensors='pt').to(device)
-                        ignored = torch.full((batch_size, 1), -100, device=device)
-                        labels = torch.cat([inputs['input_ids'][:, 1:], ignored], dim=1)
-
-                    except Exception as e:
-                        print(f"Error in collate_fn: {str(e)}")
-                        continue
+                    # Process inputs using the processor
+                    inputs = self.processor(
+                        images=batch['image'], 
+                        text=text, 
+                        padding=True, 
+                        return_tensors='pt'
+                    ).to(self.device)
+                    
+                    # Create labels tensor
+                    ignored = torch.full((batch_size, 1), -100, device=self.device)
+                    labels = torch.cat([inputs['input_ids'][:, 1:], ignored], dim=1)
 
                     # Forward pass with gradient scaling
                     try:
@@ -512,20 +468,20 @@ class Trainer:
                     if batch is None:
                         continue
 
-                    valid_samples = [item for item in batch if item is not None]
-                    batch_size = len(valid_samples)
-                    if not valid_samples:
-                        return None
-
-                    images = [item["image"] for item in valid_samples]
-                    prompts = [item["prompt"] for item in valid_samples]
-                    labels = [item["label"] for item in valid_samples]
+                    batch_size = len(batch['image'])
 
                     template = 'USER: {} EXPERT: {}</s>'
-                    text = [template.format(prompt, label) for prompt, label in zip(prompts, labels)]
+                    text = [template.format(prompt, label) 
+                           for prompt, label in zip(batch['prompt'], batch['label'])]
 
-                    inputs = processor(images=images, text=text, padding=True, return_tensors='pt').to(device)
-                    ignored = torch.full((batch_size, 1), -100, device=device)
+                    inputs = self.processor(
+                        images=batch['image'], 
+                        text=text, 
+                        padding=True, 
+                        return_tensors='pt'
+                    ).to(self.device)
+
+                    ignored = torch.full((batch_size, 1), -100, device=self.device)
                     labels = torch.cat([inputs['input_ids'][:, 1:], ignored], dim=1)
                     outputs = self.model(**inputs)
                     predictions = outputs.logits.argmax(dim=-1)
