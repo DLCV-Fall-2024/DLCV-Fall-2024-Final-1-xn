@@ -2,6 +2,7 @@ import os
 
 import torch
 from datasets import load_dataset
+from liger_kernel.transformers import apply_liger_kernel_to_llama
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     BitsAndBytesConfig,
@@ -11,6 +12,8 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+apply_liger_kernel_to_llama()
 
 
 def get_prompt(task_type):
