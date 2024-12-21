@@ -207,8 +207,7 @@ class Trainer:
             vision_inputs = self.processor.image_processor(
                 images,
                 return_tensors="pt",
-                do_resize=True,
-                size={"height": 224, "width": 224},
+                padding=True,
             )
 
             if vision_inputs.pixel_values is None:
@@ -225,7 +224,7 @@ class Trainer:
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
-                max_length=512,  # Explicit max length
+                max_length=MAX_TOKEN,  # Explicit max length
             )
 
             # Create inputs with explicit types
@@ -233,9 +232,9 @@ class Trainer:
                 "input_ids": text_inputs["input_ids"].to(torch.long),
                 "attention_mask": text_inputs["attention_mask"].to(torch.long),
                 "pixel_values": pixel_values,
-                "image_sizes": torch.tensor(
-                    [[224, 224]] * len(valid_samples), dtype=torch.long
-                ),
+                # "image_sizes": torch.tensor(
+                #     [[224, 224]] * len(valid_samples), dtype=torch.long
+                # ),
             }
 
             # Process labels with same max length
@@ -244,7 +243,7 @@ class Trainer:
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
-                max_length=512,  # Same max length as inputs
+                max_length=MAX_TOKEN,  # Same max length as inputs
             )
 
             # Create labels tensor with padding
@@ -304,7 +303,7 @@ class Trainer:
             shuffle=True,
             num_workers=2,  # Reduced for stability
             pin_memory=False,  # Disabled to prevent CUDA issues
-            collate_fn=self.custom_collate_fn,
+            collate_fn=self.collate_fn,
         )
 
         # Load validation datasets
@@ -323,7 +322,7 @@ class Trainer:
             shuffle=False,
             num_workers=2,
             pin_memory=False,
-            collate_fn=self.custom_collate_fn,
+            collate_fn=self.collate_fn,
         )
 
         # Initialize optimizer and scheduler
