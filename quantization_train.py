@@ -173,7 +173,7 @@ class Trainer:
 
             # LoRA Configuration
             lora_config = LoraConfig(
-                r=8,
+                r=64,
                 lora_alpha=128,
                 target_modules=find_all_linear_names(self.model),
                 lora_dropout=0.1,
