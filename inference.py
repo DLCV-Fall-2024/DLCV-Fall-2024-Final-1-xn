@@ -10,9 +10,9 @@ from tqdm import tqdm
 from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 
 # Configuration
-MAX_TOKEN = 1000
+MAX_TOKEN = 300
 OUTPUT_DIR = "inference_results"
-FINE_TUNED_MODEL_DIR = "fine_tuned_results/lora_final.pt"
+FINE_TUNED_MODEL_DIR = "fine_tuned_results/lora_final"
 MODEL_ID = "llava-hf/llava-v1.6-vicuna-7b-hf"
 DATA_ROOT = "data"
 DEBUG = True
