@@ -54,7 +54,6 @@ def train_model(
     num_epochs: int,
     learning_rate: float,
     cutoff_len: int,
-    val_set_size: int,
     use_dora: bool,
     quantize: bool,
     eval_step: int,
@@ -144,7 +143,7 @@ def train_model(
             text=text_input,
             images=examples["image"],
             truncation=True,
-            max_length=512,
+            max_length=cutoff_len,
             padding="max_length",
             return_tensors="pt",
         )
@@ -230,9 +229,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cutoff_len", type=int, default=300, help="Cutoff length for tokenization"
     )
-    parser.add_argument(
-        "--val_set_size", type=int, default=8716, help="Validation set size"
-    )
     parser.add_argument("--use_dora", action="store_true", help="Apply Dora")
     parser.add_argument("--quantize", action="store_true", help="Use quantization")
     parser.add_argument(
@@ -274,7 +270,6 @@ if __name__ == "__main__":
         num_epochs=args.num_epochs,
         learning_rate=args.learning_rate,
         cutoff_len=args.cutoff_len,
-        val_set_size=args.val_set_size,
         use_dora=args.use_dora,
         quantize=args.quantize,
         eval_step=args.eval_step,
