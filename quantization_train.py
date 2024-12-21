@@ -399,8 +399,9 @@ class Trainer:
                     #             raise
 
                     try:
-                        batch_size = len(batch)
+
                         valid_samples = [item for item in batch if item is not None]
+                        batch_size = len(valid_samples)
                         if not valid_samples:
                             return None
 
@@ -511,8 +512,8 @@ class Trainer:
                     if batch is None:
                         continue
 
-                    batch_size = len(batch)
                     valid_samples = [item for item in batch if item is not None]
+                    batch_size = len(valid_samples)
                     if not valid_samples:
                         return None
 
