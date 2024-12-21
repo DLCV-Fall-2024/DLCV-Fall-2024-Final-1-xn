@@ -51,3 +51,6 @@ faiss-gpu
 liger-kernel
 
 sentencepiece
+
+# gdown
+gdown
