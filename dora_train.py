@@ -1,7 +1,7 @@
 import os
 
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 from liger_kernel.transformers import apply_liger_kernel_to_llama
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
@@ -128,7 +128,7 @@ def train_model(
     model.to(device)  # MODEL TO GPU/CUDA
 
     # Load the dataset
-    dataset = load_dataset(data_path)
+    dataset = load_dataset(data_path, split=["train", "val"])
 
     def format_conversations(examples):
         return [
@@ -150,9 +150,15 @@ def train_model(
         return inputs
 
     # Tokenize the dataset and prepare for training
-    tokenized_datasets = dataset.map(
-        tokenize_function, batched=True, remove_columns=dataset["train"].column_names
-    )
+    if os.path.exists("tokenized_data"):
+        tokenized_datasets = load_from_disk("tokenized_data")
+    else:
+        tokenized_datasets = dataset.map(
+            tokenize_function,
+            batched=True,
+            remove_columns=dataset["train"].column_names,
+        )
+        tokenized_datasets.save_to_disk("tokenized_data")
 
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=processor,
@@ -212,9 +218,9 @@ if __name__ == "__main__":
     parser.add_argument("--base_model", type=str, default="llava-hf/llava-1.5-7b-hf")
     parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
     parser.add_argument("--output_dir", type=str, default="fine_tuned_llava")
-    parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
     parser.add_argument(
-        "--num_epochs", type=int, default=5, help="Number of training epochs"
+        "--num_epochs", type=int, default=1, help="Number of training epochs"
     )
     parser.add_argument(
         "--learning_rate", type=float, default=3e-4, help="Learning rate"
