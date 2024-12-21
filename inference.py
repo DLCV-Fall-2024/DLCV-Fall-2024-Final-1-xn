@@ -124,7 +124,7 @@ class LocalDataProcessor:
         }
         return prompts.get(task_type, "")
 
-    def process_single_example(self, example, task_type):
+    def process_single_example(self, example, task_type, data_root=DATA_ROOT):
         """Process a single example"""
         # Skip if already processed
         if example["id"] in self.all_results:
@@ -135,7 +135,11 @@ class LocalDataProcessor:
             }
 
         try:
-            image = Image.open(example["image"])
+            if data_root == DATA_ROOT:
+                image = Image.open(example["image"])
+            else:
+                image_path = example["image"].replace("data/", "")
+                image = Image.open(os.path.join(data_root, image_path))
             prompt = self.get_prompt(task_type)
 
             inputs = self.processor(
@@ -190,7 +194,7 @@ class LocalDataProcessor:
 
             # Process each example
             for i, example in enumerate(tqdm(examples)):
-                result = self.process_single_example(example, task_type)
+                result = self.process_single_example(example, task_type, data_root)
                 if result:
                     self.all_results[result["question_id"]] = result["answer"]
 
