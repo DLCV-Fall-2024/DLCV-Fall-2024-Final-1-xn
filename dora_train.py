@@ -129,12 +129,12 @@ def train_model(
 
     # Load the dataset
     dataset = load_dataset(data_path)
-    # test set will cause error during mapping because it has no labels
+    # test set will cause error during mapping because it contains no labels
     del dataset["test"]
 
     def format_conversations(examples):
         return [
-            f"Human: <image>\n{get_prompt(examples['id'][i].split('_')[1])}\nAssistant: {examples['conversations'][i][1]['value']}"
+            f"{get_prompt(examples['id'][i].split('_')[1])} {examples['conversations'][i][1]['value']}"
             for i in range(len(examples["id"]))
         ]
 
