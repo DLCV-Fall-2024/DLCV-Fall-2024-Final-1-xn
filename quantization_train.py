@@ -207,7 +207,8 @@ class Trainer:
             vision_inputs = self.processor.image_processor(
                 images,
                 return_tensors="pt",
-                padding=True,
+                do_resize=True,
+                size={"height": 224, "width": 224},
             )
 
             if vision_inputs.pixel_values is None:
@@ -224,7 +225,7 @@ class Trainer:
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
-                max_length=MAX_TOKEN,  # Explicit max length
+                max_length=512,  # Explicit max length
             )
 
             # Create inputs with explicit types
@@ -232,9 +233,9 @@ class Trainer:
                 "input_ids": text_inputs["input_ids"].to(torch.long),
                 "attention_mask": text_inputs["attention_mask"].to(torch.long),
                 "pixel_values": pixel_values,
-                # "image_sizes": torch.tensor(
-                #     [[224, 224]] * len(valid_samples), dtype=torch.long
-                # ),
+                "image_sizes": torch.tensor(
+                    [[224, 224]] * len(valid_samples), dtype=torch.long
+                ),
             }
 
             # Process labels with same max length
@@ -243,7 +244,7 @@ class Trainer:
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
-                max_length=MAX_TOKEN,  # Same max length as inputs
+                max_length=512,  # Same max length as inputs
             )
 
             # Create labels tensor with padding
@@ -303,7 +304,7 @@ class Trainer:
             shuffle=True,
             num_workers=2,  # Reduced for stability
             pin_memory=False,  # Disabled to prevent CUDA issues
-            collate_fn=self.collate_fn,
+            collate_fn=self.custom_collate_fn,
         )
 
         # Load validation datasets
@@ -322,7 +323,7 @@ class Trainer:
             shuffle=False,
             num_workers=2,
             pin_memory=False,
-            collate_fn=self.collate_fn,
+            collate_fn=self.custom_collate_fn,
         )
 
         # Initialize optimizer and scheduler
@@ -355,57 +356,79 @@ class Trainer:
                         torch.cuda.empty_cache()
                         gc.collect()
 
-                    # Move batch to GPU with careful type handling
-                    cuda_batch = {}
-                    for k, v in batch.items():
-                        if isinstance(v, torch.Tensor):
-                            try:
-                                if k == "pixel_values":
-                                    tensor = v.to(
-                                        device=self.device,
-                                        dtype=torch.float16,
-                                        non_blocking=True,
-                                    )
-                                elif k == "labels":
-                                    # Ensure labels are valid indices
-                                    tensor = v.clamp(
-                                        min=-100, max=self.model.config.vocab_size - 1
-                                    )
-                                    tensor = tensor.to(
-                                        device=self.device,
-                                        dtype=torch.long,
-                                        non_blocking=True,
-                                    )
-                                else:
-                                    tensor = v.to(
-                                        device=self.device,
-                                        dtype=torch.long,
-                                        non_blocking=True,
-                                    )
+                    # # Move batch to GPU with careful type handling
+                    # cuda_batch = {}
+                    # for k, v in batch.items():
+                    #     if isinstance(v, torch.Tensor):
+                    #         try:
+                    #             if k == "pixel_values":
+                    #                 tensor = v.to(
+                    #                     device=self.device,
+                    #                     dtype=torch.float16,
+                    #                     non_blocking=True,
+                    #                 )
+                    #             elif k == "labels":
+                    #                 # Ensure labels are valid indices
+                    #                 tensor = v.clamp(
+                    #                     min=-100, max=self.model.config.vocab_size - 1
+                    #                 )
+                    #                 tensor = tensor.to(
+                    #                     device=self.device,
+                    #                     dtype=torch.long,
+                    #                     non_blocking=True,
+                    #                 )
+                    #             else:
+                    #                 tensor = v.to(
+                    #                     device=self.device,
+                    #                     dtype=torch.long,
+                    #                     non_blocking=True,
+                    #                 )
 
-                                # Verify tensor
-                                if torch.isnan(tensor).any():
-                                    print(f"Warning: NaN values in {k}")
-                                    continue
-                                if torch.isinf(tensor).any():
-                                    print(f"Warning: Inf values in {k}")
-                                    continue
+                    #             # Verify tensor
+                    #             if torch.isnan(tensor).any():
+                    #                 print(f"Warning: NaN values in {k}")
+                    #                 continue
+                    #             if torch.isinf(tensor).any():
+                    #                 print(f"Warning: Inf values in {k}")
+                    #                 continue
 
-                                cuda_batch[k] = tensor
+                    #             cuda_batch[k] = tensor
 
-                            except Exception as e:
-                                print(f"Error moving tensor {k} to GPU: {str(e)}")
-                                raise
+                    #         except Exception as e:
+                    #             print(f"Error moving tensor {k} to GPU: {str(e)}")
+                    #             raise
+
+                     try:
+                        batch_size = len(batch)
+                        valid_samples = [item for item in batch if item is not None]
+                        if not valid_samples:
+                            return None
+
+                        images = [item["image"] for item in valid_samples]
+                        prompts = [item["prompt"] for item in valid_samples]
+                        labels = [item["label"] for item in valid_samples]
+
+                        template = 'USER: {} EXPERT: {}</s>'
+                        text = [template.format(prompt, label) for prompt, label in zip(prompts, labels)]
+
+                        inputs = processor(images=images, text=text, padding=True, return_tensors='pt').to(device)
+                        ignored = torch.full((batch_size, 1), -100, device=device)
+                        labels = torch.cat([inputs['input_ids'][:, 1:], ignored], dim=1)
+
+                    except Exception as e:
+                        print(f"Error in collate_fn: {str(e)}")
+                        continue
 
                     # Forward pass with gradient scaling
                     try:
-                        outputs = self.model(**cuda_batch)
-                        loss = outputs.loss
+                        outputs = self.model(**inputs)
+                        predictions = outputs.logits.argmax(dim=-1)
+                        loss = F.cross_entropy(predictions.view(-1, predictions.size(-1)), labels.view(-1))
 
-                        # Check loss validity
-                        if torch.isnan(loss) or torch.isinf(loss):
-                            print(f"Invalid loss value: {loss.item()}")
-                            continue
+                        # # Check loss validity
+                        # if torch.isnan(loss) or torch.isinf(loss):
+                        #     print(f"Invalid loss value: {loss.item()}")
+                        #     continue
 
                         # Scale loss for gradient accumulation
                         loss = loss / GRADIENT_ACCUMULATION_STEPS
@@ -488,14 +511,24 @@ class Trainer:
                     if batch is None:
                         continue
 
-                    batch = {
-                        k: v.to(self.device)
-                        for k, v in batch.items()
-                        if isinstance(v, torch.Tensor)
-                    }
-                    outputs = self.model(**batch)
-                    loss = outputs.loss
-                    total_val_loss += loss.item()
+                    batch_size = len(batch)
+                    valid_samples = [item for item in batch if item is not None]
+                    if not valid_samples:
+                        return None
+
+                    images = [item["image"] for item in valid_samples]
+                    prompts = [item["prompt"] for item in valid_samples]
+                    labels = [item["label"] for item in valid_samples]
+
+                    template = 'USER: {} EXPERT: {}</s>'
+                    text = [template.format(prompt, label) for prompt, label in zip(prompts, labels)]
+
+                    inputs = processor(images=images, text=text, padding=True, return_tensors='pt').to(device)
+                    ignored = torch.full((batch_size, 1), -100, device=device)
+                    labels = torch.cat([inputs['input_ids'][:, 1:], ignored], dim=1)
+                    outputs = self.model(**inputs)
+                    predictions = outputs.logits.argmax(dim=-1)
+                    val_loss = F.cross_entropy(predictions.view(-1, predictions.size(-1)), labels.view(-1))
                     valid_steps += 1
 
                 except Exception as e:
@@ -503,7 +536,7 @@ class Trainer:
                     continue
 
         self.model.train()
-        return total_val_loss / valid_steps if valid_steps > 0 else float("inf")
+        return val_loss / valid_steps if valid_steps > 0 else float("inf")
 
     def save_lora_weights(self, epoch, step=None):
         try:
