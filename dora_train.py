@@ -7,6 +7,7 @@ import torch
 from datasets import load_dataset
 from liger_kernel.transformers import apply_liger_kernel_to_llama
 from peft import LoraConfig, get_peft_model
+from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 from transformers import (
     AutoProcessor,
@@ -143,6 +144,13 @@ class LlavaTransformer(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         return optimizer
 
+    def on_save_checkpoint(self, checkpoint):
+        save_dir = os.path.join(
+            self.trainer.default_root_dir, f"lora_epoch_{self.current_epoch}"
+        )
+        self.model.save_pretrained(save_dir)
+        print(f"LoRA model saved at {save_dir}")
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_id", type=str, default="llava-hf/llava-1.5-7b-hf")
@@ -150,7 +158,7 @@ parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
 parser.add_argument("--output_dir", type=str, default="fine_tuned_llava")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument(
-    "--num_epochs", type=int, default=1, help="Number of training epochs"
+    "--num_epochs", type=int, default=5, help="Number of training epochs"
 )
 parser.add_argument("--learning_rate", type=float, default=3e-4, help="Learning rate")
 parser.add_argument(
@@ -251,6 +259,7 @@ trainer = pl.Trainer(
     precision="16-mixed",
     limit_val_batches=4,
     accumulate_grad_batches=4,
+    callbacks=[ModelCheckpoint(save_top_k=-1, save_on_train_epoch_end=True)],
 )
 
 trainer.fit(model, train_dataloader, val_dataloader)
