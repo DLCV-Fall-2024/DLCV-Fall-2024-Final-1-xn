@@ -8,7 +8,11 @@ from datasets import load_dataset
 from liger_kernel.transformers import apply_liger_kernel_to_llama
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader
-from transformers import AutoProcessor, LlavaNextForConditionalGeneration
+from transformers import (
+    AutoProcessor,
+    BitsAndBytesConfig,
+    LlavaForConditionalGeneration,
+)
 
 apply_liger_kernel_to_llama()
 
@@ -45,23 +49,19 @@ def get_prompt(task_type):
 
 def format_conversations(examples):
     return [
-        f"{get_prompt(examples['id'][i].split('_')[1])} {examples['conversations'][i][1]['value']}"
-        for i in range(len(examples["id"]))
+        f"{get_prompt(examples[i]['id'].split('_')[1])} {examples[i]['conversations'][1]['value']}"
+        for i in range(len(examples))
     ]
 
 
 def train_collate_fn(examples):
     images = [example["image"] for example in examples]
     texts = format_conversations(examples)
-    print(texts[0])
-    print(len(texts))
 
     batch = processor(
         text=texts,
         images=images,
         padding=True,
-        truncation=True,
-        max_length=max_length,
         return_tensors="pt",
     )
 
@@ -69,18 +69,19 @@ def train_collate_fn(examples):
     labels[labels == processor.tokenizer.pad_token_id] = -100
     batch["labels"] = labels
 
-    input_ids = batch["input_ids"]
-    attention_mask = batch["attention_mask"]
-    pixel_values = batch["pixel_values"]
-    labels = batch["labels"]
-
-    return input_ids, attention_mask, pixel_values, labels
+    return (
+        batch["input_ids"],
+        batch["attention_mask"],
+        batch["pixel_values"],
+        batch["labels"],
+    )
 
 
 def eval_collate_fn(examples):
     images = []
     texts = []
     answers = []
+
     for example in examples:
         image = example["image"]
         ground_truth = example["conversations"][1]["value"]
@@ -109,6 +110,7 @@ class LlavaTransformer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         input_ids, attention_mask, pixel_values, labels = batch
+
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -154,7 +156,6 @@ parser.add_argument("--learning_rate", type=float, default=3e-4, help="Learning 
 parser.add_argument(
     "--max_length", type=int, default=300, help="Cutoff length for tokenization"
 )
-parser.add_argument("--use_dora", action="store_true", help="Apply Dora")
 parser.add_argument(
     "--device", type=str, default="cuda:0", help="Device to use for training"
 )
@@ -173,12 +174,10 @@ batch_size = args.batch_size
 num_epochs = args.num_epochs
 learning_rate = args.learning_rate
 max_length = args.max_length
-use_dora = args.use_dora
 device = args.device
 lora_r = args.lora_r
 lora_alpha = args.lora_alpha
 lora_dropout = args.lora_dropout
-
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 hf_token = os.getenv("HF_TOKEN")
@@ -186,13 +185,24 @@ hf_token = os.getenv("HF_TOKEN")
 device = torch.device(device)
 print(f"Using device: {device}")
 
-processor = AutoProcessor.from_pretrained(model_id)
+processor = AutoProcessor.from_pretrained(model_id, torch_dtype=torch.float16)
 processor.tokenizer.padding_side = "right"
 
-pretrained_model = LlavaNextForConditionalGeneration.from_pretrained(
+pretrained_model = LlavaForConditionalGeneration.from_pretrained(
     model_id,
     token=hf_token,
+    quantization_config=BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_compute_dtype=(
+            torch.bfloat16
+            if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+            else torch.float16
+        ),
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+    ),
     _attn_implementation="flash_attention_2",
+    torch_dtype=torch.float16,
 )
 
 target_modules_list = [
@@ -206,7 +216,7 @@ target_modules_list = [
 ]
 
 lora_config = LoraConfig(
-    use_dora=use_dora,
+    use_dora=True,
     r=lora_r,
     lora_alpha=lora_alpha,
     target_modules=target_modules_list,
@@ -238,8 +248,9 @@ trainer = pl.Trainer(
     accelerator="gpu",
     devices=1,
     max_epochs=num_epochs,
-    progress_bar_refresh_rate=1,
-    precision=16,
+    precision="16-mixed",
+    limit_val_batches=4,
+    accumulate_grad_batches=4,
 )
 
 trainer.fit(model, train_dataloader, val_dataloader)
