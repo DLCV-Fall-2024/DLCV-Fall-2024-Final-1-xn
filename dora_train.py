@@ -47,21 +47,30 @@ def get_prompt(task_type):
             "discuss any objects beyond the seven categories above. Please describe each object's "
             "color, position, status, implication, responses, and how they influence ego car. EXPERT:"
         ),
-        "region": (
+        "regional": (
             "A chat between a curious human and an autonomous driving expert, specializing in "
             "recognizing traffic scenes and making detailed explanations. The expert receives an "
             "image of traffic captured from the perspective of the ego car. USER: <image>\n"
             "Please describe the object inside the red rectangle in the image and explain why it "
             "affects ego car driving. EXPERT:"
         ),
-        "driving": (
+        "suggestion": (
             "A chat between a curious human and an autonomous driving expert, specializing in "
             "providing specific and helpful driving suggestions. The expert receives an image of "
             "traffic captured from the perspective of the ego car. USER: <image>\n"
             "Please provide driving suggestions for the ego car based on the current scene. EXPERT:"
         ),
     }
-    return prompts.get(task_type, "")
+
+    if task_type == "general":
+        return prompts["general"]
+    elif task_type == "regional":
+        return prompts["regional"]
+    elif task_type == "suggestion":
+        return prompts["suggestion"]
+    else:
+        print(f"Invalid task type: {task_type}")
+        raise ValueError
 
 
 def format_conversations(examples):
@@ -229,12 +238,19 @@ pretrained_model = LlavaForConditionalGeneration.from_pretrained(
 
 target_modules_list = [
     "q_proj",
+    # "k_proj",
+    # "v_proj",
+    # "o_proj",
+    # "gate_proj",
+    # "up_proj",
+    # "down_proj",
 ]
 
 lora_config = LoraConfig(
     use_dora=True,
     r=lora_r,
     lora_alpha=lora_alpha,
+    # target_modules=find_all_linear_names(pretrained_model),
     target_modules=target_modules_list,
     lora_dropout=lora_dropout,
     bias="none",

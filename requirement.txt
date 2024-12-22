@@ -55,6 +55,6 @@ liger-kernel
 
 sentencepiece
 pytorch-lightning
-flash-attn
+
 # gdown
 gdown
