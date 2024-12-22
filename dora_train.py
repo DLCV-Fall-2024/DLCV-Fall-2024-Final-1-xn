@@ -18,6 +18,22 @@ from transformers import (
 apply_liger_kernel_to_llama()
 
 
+def find_all_linear_names(model):
+    cls = torch.nn.Linear
+    lora_module_names = set()
+    multimodal_keywords = ["mm_projector", "vision_tower", "vision_resampler"]
+    for name, module in model.named_modules():
+        if any(mm_keyword in name for mm_keyword in multimodal_keywords):
+            continue
+        if isinstance(module, cls):
+            names = name.split(".")
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    if "lm_head" in lora_module_names:
+        lora_module_names.remove("lm_head")
+    return list(lora_module_names)
+
+
 def get_prompt(task_type):
     prompts = {
         "general": (
@@ -145,9 +161,7 @@ class LlavaTransformer(pl.LightningModule):
         return optimizer
 
     def on_save_checkpoint(self, checkpoint):
-        save_dir = os.path.join(
-            self.trainer.default_root_dir, f"lora_epoch_{self.current_epoch}"
-        )
+        save_dir = os.path.join(output_dir, f"lora_epoch_{self.current_epoch}")
         self.model.save_pretrained(save_dir)
         print(f"LoRA model saved at {save_dir}")
 
@@ -155,10 +169,10 @@ class LlavaTransformer(pl.LightningModule):
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_id", type=str, default="llava-hf/llava-1.5-7b-hf")
 parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
-parser.add_argument("--output_dir", type=str, default="fine_tuned_llava")
+parser.add_argument("--output_dir", type=str, default="fine_tuned_results")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument(
-    "--num_epochs", type=int, default=5, help="Number of training epochs"
+    "--num_epochs", type=int, default=1, help="Number of training epochs"
 )
 parser.add_argument("--learning_rate", type=float, default=3e-4, help="Learning rate")
 parser.add_argument(
@@ -227,7 +241,7 @@ lora_config = LoraConfig(
     use_dora=True,
     r=lora_r,
     lora_alpha=lora_alpha,
-    target_modules=target_modules_list,
+    target_modules=find_all_linear_names(pretrained_model),
     lora_dropout=lora_dropout,
     bias="none",
 )

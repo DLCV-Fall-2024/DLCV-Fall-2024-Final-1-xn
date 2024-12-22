@@ -1,3 +1,6 @@
+torch>=2.0.0
+torchvision
+torchaudio
 # Core dependencies
 numpy>=1.24.0
 pandas>=2.0.0
@@ -51,6 +54,7 @@ faiss-gpu
 liger-kernel
 
 sentencepiece
-
+pytorch-lightning
+flash-attn
 # gdown
 gdown
