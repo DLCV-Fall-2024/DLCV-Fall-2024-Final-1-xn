@@ -179,9 +179,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model_id", type=str, default="llava-hf/llava-1.5-7b-hf")
 parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
 parser.add_argument("--output_dir", type=str, default="fine_tuned_results")
-parser.add_argument("--batch_size", type=int, default=5, help="Batch size")
+parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument(
-    "--num_epochs", type=int, default=1, help="Number of training epochs"
+    "--num_epochs", type=int, default=2, help="Number of training epochs"
 )
 parser.add_argument("--learning_rate", type=float, default=3e-4, help="Learning rate")
 parser.add_argument(
@@ -238,20 +238,20 @@ pretrained_model = LlavaForConditionalGeneration.from_pretrained(
 
 target_modules_list = [
     "q_proj",
-    # "k_proj",
-    # "v_proj",
-    # "o_proj",
-    # "gate_proj",
-    # "up_proj",
-    # "down_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
 ]
 
 lora_config = LoraConfig(
     use_dora=True,
     r=lora_r,
     lora_alpha=lora_alpha,
-    # target_modules=find_all_linear_names(pretrained_model),
-    target_modules=target_modules_list,
+    target_modules=find_all_linear_names(pretrained_model),
+    # target_modules=target_modules_list,
     lora_dropout=lora_dropout,
     bias="none",
 )
@@ -259,13 +259,14 @@ lora_config = LoraConfig(
 pretrained_model = get_peft_model(pretrained_model, lora_config)
 pretrained_model.to(device)
 
-dataset = load_dataset(data_path, streaming=True)
+dataset = load_dataset(data_path)
 del dataset["test"]
 
 train_dataloader = DataLoader(
     dataset["train"],
     batch_size=batch_size,
     collate_fn=train_collate_fn,
+    shuffle=True,
 )
 
 val_dataloader = DataLoader(
