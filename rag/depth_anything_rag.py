@@ -8,14 +8,14 @@ from typing import Dict, List
 import faiss
 import torch
 import torch.nn.functional as F
+from feature_extractor import FeatureExtractor
 from PIL import Image
+from task_retriever import TaskRetriever
 from torchvision import transforms
 from tqdm import tqdm
 from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 
 from depth_anything.dpt import DepthAnything
-from feature_extractor import FeatureExtractor
-from task_retriever import TaskRetriever
 
 
 class RAGInference:

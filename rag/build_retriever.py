@@ -4,13 +4,13 @@ import os
 from pathlib import Path
 
 import torch
+from feature_extractor import FeatureExtractor
 from PIL import Image
+from task_retriever import TaskRetriever
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from depth_anything.dpt import DepthAnything
-from feature_extractor import FeatureExtractor
-from task_retriever import TaskRetriever
 
 
 class CODALMDataset(Dataset):
