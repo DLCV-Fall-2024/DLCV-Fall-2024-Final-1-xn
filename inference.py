@@ -1,21 +1,17 @@
-import argparse
-import gc
 import json
 import os
 import shutil
-import time
 
 import torch
 from datasets import load_dataset
 from peft import PeftModel
-from PIL import Image
 from tqdm import tqdm
 from transformers import AutoProcessor, LlavaForConditionalGeneration
 
 # Configuration
 MAX_TOKEN = 300
 OUTPUT_DIR = "inference_results"
-FINE_TUNED_MODEL_DIR = "<insert model dir>"
+FINE_TUNED_MODEL_DIR = "fine_tuned_results/lora_epoch_1"
 MODEL_ID = "llava-hf/llava-1.5-7b-hf"
 
 # Set higher memory fraction for RTX 4090
@@ -26,7 +22,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 def create_submission_zip():
     api_key_path = os.path.join(OUTPUT_DIR, "api_key.txt")
     with open(api_key_path, "w") as f:
-        f.write("YOUR_GEMINI_API_KEY")  # Replace with actual API key
+        f.write("YOUR_GEMINI_API_KEY")
 
     import tempfile
 
