@@ -1,6 +1,7 @@
 import pickle
 from pathlib import Path
 from typing import Dict, List, Tuple
+import numpy as np
 
 import faiss
 import numpy as np
@@ -13,6 +14,7 @@ class TaskRetriever:
         task_type: str,
         embedding_dim: int,
         device: str = "cuda",
+        mode: str = "depth",  # Added mode to specify retrieval type
         index_path: str = None,
         similarity_weights: Dict[str, float] = None,
     ):
@@ -23,12 +25,14 @@ class TaskRetriever:
             task_type: One of ['general', 'region', 'driving']
             embedding_dim: Dimension of the feature embeddings
             device: Device to store embeddings
+            mode: 'depth' (ordinary) or 'grounding' (top-k bboxes + mIoU rerank)
             index_path: Path to load/save faiss index
             similarity_weights: Weights for different feature types
         """
         self.task_type = task_type
         self.device = device
         self.embedding_dim = embedding_dim
+        self.mode = mode
 
         # Initialize FAISS index for fast similarity search
         self.index = faiss.IndexFlatIP(
@@ -106,7 +110,7 @@ class TaskRetriever:
         self.total_examples += len(examples_batch)
 
     def retrieve(
-        self, query_features: torch.Tensor, k: int = 5
+        self, query_features: torch.Tensor, k: int = 5, query_bboxes: List[List[float]] = None
     ) -> Tuple[List[Dict], np.ndarray]:
         """
         Retrieve k most similar examples
@@ -114,6 +118,7 @@ class TaskRetriever:
         Args:
             query_features: Query feature tensor
             k: Number of examples to retrieve
+            query_bboxes: List of bounding boxes for grounding mode
 
         Returns:
             Tuple of (retrieved examples, similarity scores)
@@ -129,10 +134,18 @@ class TaskRetriever:
         # Search FAISS index
         scores, indices = self.index.search(query_features, min(k, self.total_examples))
 
-        # Get corresponding examples
-        retrieved_examples = [self.examples[idx] for idx in indices[0]]
+        # # Get corresponding examples
+        # retrieved_examples = [self.examples[idx] for idx in indices[0]]
 
-        return retrieved_examples, scores[0]
+        # return retrieved_examples, scores[0]
+        if self.mode == "depth":
+            return self._retrieve_depth(indices, scores, k)
+        elif self.mode == "grounding":
+            if query_bboxes is None:
+                query_bboxes = []
+            return self._retrieve_grounding(query_features, query_bboxes, indices, scores, k)
+        else:
+            raise ValueError(f"Unsupported mode: {self.mode}")
 
     def save_index(self, save_dir: str):
         """Save FAISS index and examples to disk"""
@@ -179,3 +192,78 @@ class TaskRetriever:
             self.examples = data["examples"]
             self.total_examples = data["total_examples"]
             self.similarity_weights = data["similarity_weights"]
+
+    def _retrieve_depth(
+        self, indices: np.ndarray, scores: np.ndarray, k: int
+    ) -> Tuple[List[Dict], np.ndarray]:
+        retrieved_examples = [self.examples[idx] for idx in indices[0]]
+        return retrieved_examples, scores[0]
+
+    #add for ground dino
+    def _retrieve_grounding(
+        self,
+        query_features: np.ndarray,
+        query_bboxes: List[List[float]],
+        indices: np.ndarray,
+        scores: np.ndarray,
+        k: int
+    ) -> Tuple[List[Dict], np.ndarray]:
+        """
+        rerank (mIoU)
+        """
+        initial_results = []
+        for idx, score in zip(indices[0], scores[0]):
+            example = self.examples[idx]
+            # Save initial score
+            initial_results.append((score, example))
+
+        # new_score = 0.7 * score + 0.3 * mean_iou
+        reranked = []
+        for score, example in initial_results:
+            db_bboxes = example.get("bounding_boxes", [])
+            iou_score = self._mean_iou(query_bboxes, db_bboxes)
+            # Combine scores
+            new_score = 0.7 * score + 0.3 * iou_score
+            reranked.append((new_score, example))
+
+        # Sort by new score
+        reranked.sort(key=lambda x: x[0], reverse=True)
+
+        top_k = reranked[:k]
+        top_examples = [r[1] for r in top_k]
+        top_scores = [r[0] for r in top_k]
+        return top_examples, top_scores
+
+    def _mean_iou(self, bboxes1: List[List[float]], bboxes2: List[List[float]]) -> float:
+        """
+        Calculate mIoU of two classes of bounding boxes
+        bboxes1, bboxes2: list of [x1, y1, x2, y2]
+        """
+        if not bboxes1 or not bboxes2:
+            return 0.0
+
+        total_iou = 0.0
+        count = 0
+        for boxA in bboxes1:
+            for boxB in bboxes2:
+                total_iou += self._iou(boxA, boxB)
+                count += 1
+
+        return total_iou / count if count > 0 else 0.0
+
+    def _iou(self, boxA, boxB) -> float:
+        """
+        Calculate IoU of two bounding boxes
+        boxA, boxB: [x1, y1, x2, y2]
+        """
+        xA = max(boxA[0], boxB[0])
+        yA = max(boxA[1], boxB[1])
+        xB = min(boxA[2], boxB[2])
+        yB = min(boxA[3], boxB[3])
+
+        interArea = max(0, xB - xA) * max(0, yB - yA)
+        boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+        boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+        union = boxAArea + boxBArea - interArea
+
+        return interArea / union if union > 0 else 0.0

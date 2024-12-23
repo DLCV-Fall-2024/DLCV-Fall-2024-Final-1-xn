@@ -46,3 +46,15 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 
 faiss-gpu
+
+# Liger Kernel
+liger-kernel
+
+sentencepiece
+
+# gdown
+gdown
+
+torchaudio==2.0.2
+
+supervision==0.6.0
