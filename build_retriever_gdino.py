@@ -25,9 +25,9 @@ class GDINOFeatureExtractor:
             Dictionary containing bounding box and class information.
         """
 
-        TEXT_PROMPT = "car, truck, bus, pedestrian, cyclist, motorcycle, animal, traffic light, stop sign, road sign, lane marking"
+        TEXT_PROMPT = "car, truck, bus, pedestrian, motorcycle, traffic light, animal, stop sign, road sign"
 
-        BOX_TRESHOLD = 0.3
+        BOX_TRESHOLD = 0.25
         TEXT_TRESHOLD = 0.25
 
         with torch.no_grad():
