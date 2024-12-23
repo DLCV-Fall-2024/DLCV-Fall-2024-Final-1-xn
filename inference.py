@@ -6,7 +6,11 @@ import torch
 from datasets import load_dataset
 from peft import PeftModel
 from tqdm import tqdm
-from transformers import AutoProcessor, LlavaForConditionalGeneration
+from transformers import (
+    AutoProcessor,
+    BitsAndBytesConfig,
+    LlavaForConditionalGeneration,
+)
 
 # Configuration
 MAX_TOKEN = 300
@@ -14,7 +18,6 @@ OUTPUT_DIR = "inference_results"
 FINE_TUNED_MODEL_DIR = "fine_tuned_results/lora_epoch_1"
 MODEL_ID = "llava-hf/llava-1.5-7b-hf"
 
-# Set higher memory fraction for RTX 4090
 torch.cuda.set_per_process_memory_fraction(0.95)
 torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -42,6 +45,7 @@ class DataProcessor:
         self.setup_model()
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         self.all_results = self.load_existing_results()
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     def load_existing_results(self):
         """Load existing results from submission.json if it exists"""
@@ -77,8 +81,17 @@ class DataProcessor:
         self.model = LlavaForConditionalGeneration.from_pretrained(
             MODEL_ID,
             torch_dtype=torch.float16,
+            quantization_config=BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=(
+                    torch.bfloat16
+                    if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+                    else torch.float16
+                ),
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+            ),
             device_map="cuda:0",
-            low_cpu_mem_usage=True,
         )
 
         self.model = PeftModel.from_pretrained(
@@ -133,6 +146,10 @@ class DataProcessor:
         inputs = self.processor(
             text=prompt, images=images, return_tensors="pt", padding=True
         )
+        inputs = {
+            k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+            for k, v in inputs.items()
+        }
 
         with torch.no_grad(), torch.amp.autocast("cuda"):
             output = self.model.generate(
