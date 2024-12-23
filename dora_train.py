@@ -69,8 +69,7 @@ def get_prompt(task_type):
     elif task_type == "suggestion":
         return prompts["suggestion"]
     else:
-        print(f"Invalid task type: {task_type}")
-        raise ValueError
+        raise ValueError(f"Invalid task type: {task_type}")
 
 
 def format_conversations(examples):
@@ -171,6 +170,7 @@ class LlavaTransformer(pl.LightningModule):
 
     def on_save_checkpoint(self, checkpoint):
         save_dir = os.path.join(output_dir, f"lora_epoch_{self.current_epoch}")
+        os.makedirs(save_dir, exist_ok=True)
         self.model.save_pretrained(save_dir)
         print(f"LoRA model saved at {save_dir}")
 
