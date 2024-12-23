@@ -1,17 +1,22 @@
 import json
 import os
 import shutil
+
 import torch
-from PIL import Image
 from peft import PeftModel
+from PIL import Image
 from tqdm import tqdm
-from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalGeneration
+from transformers import (
+    AutoProcessor,
+    BitsAndBytesConfig,
+    LlavaForConditionalGeneration,
+)
 
 # Configuration
 MAX_TOKEN = 300
 BATCH_SIZE = 8  # Adjust based on your GPU memory
 OUTPUT_DIR = "inference_results"
-FINE_TUNED_MODEL_DIR = "fine_tuned_results/lora_epoch_1"
+FINE_TUNED_MODEL_DIR = "../fine_tuned_results/lora_epoch_1"
 MODEL_ID = "llava-hf/llava-1.5-7b-hf"
 DATA_ROOT = "data"
 
@@ -19,21 +24,23 @@ torch.cuda.set_per_process_memory_fraction(0.95)
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 
+
 def clean_response(text):
     """Clean and format the model output."""
     # Split by EXPERT: if present
     if "EXPERT: " in text:
         text = text.split("EXPERT: ", 1)[1]
-    
+
     # Find the last complete sentence
-    last_period_idx = text.rfind('.')
+    last_period_idx = text.rfind(".")
     if last_period_idx == -1:
         # If no period found, add one at the end
         return text.strip() + "."
-    
+
     # Keep all complete sentences
-    cleaned_text = text[:last_period_idx + 1].strip()
+    cleaned_text = text[: last_period_idx + 1].strip()
     return cleaned_text
+
 
 class DataProcessor:
     def __init__(self):
@@ -54,10 +61,10 @@ class DataProcessor:
             save_path = os.path.join(OUTPUT_DIR, "submission_intermediate.json")
         else:
             save_path = os.path.join(OUTPUT_DIR, "submission.json")
-        
+
         with open(save_path, "w") as f:
             json.dump(self.all_results, f, indent=2)
-        
+
         if not intermediate:
             print(f"Final results saved to {save_path}")
 
@@ -65,10 +72,12 @@ class DataProcessor:
         print("Setting up model...")
         if torch.cuda.is_available():
             print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
-            print(f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.1f}MB")
+            print(
+                f"Total GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.1f}MB"
+            )
 
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
-        
+
         self.model = LlavaForConditionalGeneration.from_pretrained(
             MODEL_ID,
             torch_dtype=torch.float16,
@@ -118,33 +127,31 @@ class DataProcessor:
     def process_batch(self, batch_examples, task_type):
         """Process a batch of examples together."""
         # Skip already processed examples
-        batch_examples = [ex for ex in batch_examples if ex['id'] not in self.all_results]
+        batch_examples = [
+            ex for ex in batch_examples if ex["id"] not in self.all_results
+        ]
         if not batch_examples:
             return []
 
         try:
             # Prepare batch inputs
-            images = [Image.open(ex['image']) for ex in batch_examples]
+            images = [Image.open(ex["image"]) for ex in batch_examples]
             prompt = self.get_prompt(task_type)
             prompts = [prompt] * len(images)
 
             # Process batch
             inputs = self.processor(
-                text=prompts,
-                images=images,
-                return_tensors="pt",
-                padding=True
+                text=prompts, images=images, return_tensors="pt", padding=True
             )
-            inputs = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
-                     for k, v in inputs.items()}
+            inputs = {
+                k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                for k, v in inputs.items()
+            }
 
             # Generate outputs
             with torch.no_grad(), torch.amp.autocast("cuda"):
                 outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=MAX_TOKEN,
-                    do_sample=False,
-                    use_cache=True
+                    **inputs, max_new_tokens=MAX_TOKEN, do_sample=False, use_cache=True
                 )
 
             # Process results
@@ -152,10 +159,9 @@ class DataProcessor:
             for i, output in enumerate(outputs):
                 result = self.processor.decode(output, skip_special_tokens=True)
                 result = clean_response(result)  # Clean and format the response
-                results.append({
-                    "question_id": batch_examples[i]['id'],
-                    "answer": result
-                })
+                results.append(
+                    {"question_id": batch_examples[i]["id"], "answer": result}
+                )
 
             # Clean up
             del inputs, outputs
@@ -172,7 +178,7 @@ class DataProcessor:
         tasks = [
             ("general", "general_perception"),
             ("region", "region_perception"),
-            ("driving", "driving_suggestion")
+            ("driving", "driving_suggestion"),
         ]
 
         for task_type, filename in tasks:
@@ -180,7 +186,7 @@ class DataProcessor:
             data_file = os.path.join(DATA_ROOT, "annotations", f"test_{filename}.jsonl")
 
             try:
-                with open(data_file, 'r') as f:
+                with open(data_file, "r") as f:
                     examples = [json.loads(line) for line in f]
             except FileNotFoundError:
                 print(f"Error: Could not find file {data_file}")
@@ -188,9 +194,9 @@ class DataProcessor:
 
             # Process in batches
             for i in tqdm(range(0, len(examples), BATCH_SIZE)):
-                batch = examples[i:i + BATCH_SIZE]
+                batch = examples[i : i + BATCH_SIZE]
                 results = self.process_batch(batch, task_type)
-                
+
                 # Save results
                 for result in results:
                     self.all_results[result["question_id"]] = result["answer"]
@@ -210,6 +216,7 @@ def create_submission_zip():
         f.write("YOUR_GEMINI_API_KEY")
 
     import tempfile
+
     with tempfile.TemporaryDirectory() as temp_dir:
         shutil.copy2(os.path.join(OUTPUT_DIR, "submission.json"), temp_dir)
         shutil.copy2(api_key_path, temp_dir)
