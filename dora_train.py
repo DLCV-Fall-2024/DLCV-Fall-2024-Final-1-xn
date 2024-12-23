@@ -181,7 +181,7 @@ parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
 parser.add_argument("--output_dir", type=str, default="fine_tuned_results")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument(
-    "--num_epochs", type=int, default=2, help="Number of training epochs"
+    "--num_epochs", type=int, default=5, help="Number of training epochs"
 )
 parser.add_argument("--learning_rate", type=float, default=3e-4, help="Learning rate")
 parser.add_argument(
@@ -190,7 +190,7 @@ parser.add_argument(
 parser.add_argument(
     "--device", type=str, default="cuda:0", help="Device to use for training"
 )
-parser.add_argument("--lora_r", type=int, default=8, help="LoRA rank")
+parser.add_argument("--lora_r", type=int, default=64, help="LoRA rank")
 parser.add_argument("--lora_alpha", type=int, default=16, help="LoRA alpha")
 parser.add_argument(
     "--lora_dropout", type=float, default=0.05, help="LoRA dropout rate"
@@ -216,24 +216,23 @@ hf_token = os.getenv("HF_TOKEN")
 device = torch.device(device)
 print(f"Using device: {device}")
 
-processor = AutoProcessor.from_pretrained(model_id, torch_dtype=torch.float16)
+processor = AutoProcessor.from_pretrained(model_id)
 processor.tokenizer.padding_side = "right"
 
 pretrained_model = LlavaForConditionalGeneration.from_pretrained(
     model_id,
     token=hf_token,
-    quantization_config=BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=(
-            torch.bfloat16
-            if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-            else torch.float16
-        ),
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-    ),
+    # quantization_config=BitsAndBytesConfig(
+    #     load_in_4bit=True,
+    #     bnb_4bit_compute_dtype=(
+    #         torch.bfloat16
+    #         if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+    #         else torch.float16
+    #     ),
+    #     bnb_4bit_use_double_quant=True,
+    #     bnb_4bit_quant_type="nf4",
+    # ),
     _attn_implementation="flash_attention_2",
-    torch_dtype=torch.float16,
 )
 
 target_modules_list = [
@@ -281,7 +280,6 @@ trainer = pl.Trainer(
     accelerator="gpu",
     devices=1,
     max_epochs=num_epochs,
-    precision="16-mixed",
     limit_val_batches=4,
     accumulate_grad_batches=4,
     callbacks=[ModelCheckpoint(save_top_k=-1, save_on_train_epoch_end=True)],
