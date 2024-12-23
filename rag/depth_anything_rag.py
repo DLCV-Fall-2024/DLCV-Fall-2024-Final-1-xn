@@ -122,7 +122,6 @@ class RAGInference:
                 self.device
             )
 
-            # Generate response
             with torch.cuda.amp.autocast():
                 output = self.model.generate(
                     **inputs, max_new_tokens=500, do_sample=False, use_cache=True

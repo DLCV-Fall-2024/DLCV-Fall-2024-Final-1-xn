@@ -216,23 +216,24 @@ hf_token = os.getenv("HF_TOKEN")
 device = torch.device(device)
 print(f"Using device: {device}")
 
-processor = AutoProcessor.from_pretrained(model_id)
+processor = AutoProcessor.from_pretrained(model_id, torch_dtype=torch.float16)
 processor.tokenizer.padding_side = "right"
 
 pretrained_model = LlavaForConditionalGeneration.from_pretrained(
     model_id,
     token=hf_token,
-    # quantization_config=BitsAndBytesConfig(
-    #     load_in_4bit=True,
-    #     bnb_4bit_compute_dtype=(
-    #         torch.bfloat16
-    #         if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-    #         else torch.float16
-    #     ),
-    #     bnb_4bit_use_double_quant=True,
-    #     bnb_4bit_quant_type="nf4",
-    # ),
+    quantization_config=BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_compute_dtype=(
+            torch.bfloat16
+            if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+            else torch.float16
+        ),
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+    ),
     _attn_implementation="flash_attention_2",
+    torch_dtype=torch.float16,
 )
 
 target_modules_list = [
@@ -280,6 +281,7 @@ trainer = pl.Trainer(
     accelerator="gpu",
     devices=1,
     max_epochs=num_epochs,
+    precision="16-mixed",
     limit_val_batches=4,
     accumulate_grad_batches=4,
     callbacks=[ModelCheckpoint(save_top_k=-1, save_on_train_epoch_end=True)],
