@@ -27,8 +27,8 @@ class GDINOFeatureExtractor:
 
         TEXT_PROMPT = "car, truck, bus, pedestrian, cyclist, motorcycle, animal, traffic light, stop sign, road sign, lane marking"
 
-        BOX_TRESHOLD = 0.5
-        TEXT_TRESHOLD = 0.5
+        BOX_TRESHOLD = 0.35
+        TEXT_TRESHOLD = 0.25
 
         with torch.no_grad():
             boxes, logits, _ = predict(
