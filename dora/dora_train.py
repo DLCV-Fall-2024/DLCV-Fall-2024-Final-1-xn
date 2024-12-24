@@ -181,7 +181,7 @@ parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
 parser.add_argument("--output_dir", type=str, default="fine_tuned_results")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument(
-    "--num_epochs", type=int, default=5, help="Number of training epochs"
+    "--num_epochs", type=int, default=2, help="Number of training epochs"
 )
 parser.add_argument("--learning_rate", type=float, default=3e-4, help="Learning rate")
 parser.add_argument(
@@ -190,7 +190,7 @@ parser.add_argument(
 parser.add_argument(
     "--device", type=str, default="cuda:0", help="Device to use for training"
 )
-parser.add_argument("--lora_r", type=int, default=64, help="LoRA rank")
+parser.add_argument("--lora_r", type=int, default=8, help="LoRA rank")
 parser.add_argument("--lora_alpha", type=int, default=16, help="LoRA alpha")
 parser.add_argument(
     "--lora_dropout", type=float, default=0.05, help="LoRA dropout rate"
@@ -247,7 +247,7 @@ target_modules_list = [
 ]
 
 lora_config = LoraConfig(
-    use_dora=True,
+    use_dora=False,
     r=lora_r,
     lora_alpha=lora_alpha,
     target_modules=find_all_linear_names(pretrained_model),
