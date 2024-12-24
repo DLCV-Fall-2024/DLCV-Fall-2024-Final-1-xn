@@ -5,7 +5,7 @@ from peft import PeftModel
 from pycocoevalcap.bleu.bleu import Bleu
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoProcessor, AutoTokenizer, LlavaForConditionalGeneration
+from transformers import AutoProcessor, LlavaForConditionalGeneration
 from trl import PPOConfig, PPOTrainer
 
 
