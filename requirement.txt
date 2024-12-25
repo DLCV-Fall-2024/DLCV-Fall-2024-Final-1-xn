@@ -60,4 +60,4 @@ pytorch-lightning
 gdown
 
 # trl
-trl==0.13.0
+trl
