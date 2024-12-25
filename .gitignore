@@ -9,4 +9,3 @@ val/
 !few_shot/**/*.json
 .idea
 .cadence
-data
