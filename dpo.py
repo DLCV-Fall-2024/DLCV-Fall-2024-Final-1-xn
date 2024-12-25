@@ -1,8 +1,6 @@
-# %reload_ext autoreload
-# %autoreload 2
 import torch
 from datasets import load_dataset
-from peft import LoraConfig
+from peft import LoraConfig, PeftModel
 from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
 
 from trl import DPOConfig, DPOTrainer
@@ -17,7 +15,6 @@ peft_config = LoraConfig(
     ],
     bias="none",
 )
-
 
 model = AutoModelForVision2Seq.from_pretrained(
     "fine_tuned_results/lora_epoch_0",
@@ -34,6 +31,9 @@ model = AutoModelForVision2Seq.from_pretrained(
         bnb_4bit_quant_type="nf4",
     ),
     _attn_implementation="flash_attention_2",
+)
+model = PeftModel.from_pretrained(
+    model, "fine_tuned_results/lora_epoch_0", torch_dtype=torch.float16
 )
 model.gradient_checkpointing_enable()
 model.config.use_cache = False
