@@ -3,9 +3,7 @@
 import torch
 from datasets import load_dataset
 from peft import LoraConfig
-from PIL import Image
 from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
-from transformers.data.data_collator import DataCollatorMixin
 
 from trl import DPOConfig, DPOTrainer
 

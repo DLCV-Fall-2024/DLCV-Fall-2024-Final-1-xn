@@ -16,7 +16,7 @@ from transformers import (
 MAX_TOKEN = 300
 BATCH_SIZE = 8  # Adjust based on your GPU memory
 OUTPUT_DIR = "inference_results"
-FINE_TUNED_MODEL_DIR = "../fine_tuned_results/lora_epoch_1"
+FINE_TUNED_MODEL_DIR = "/content/dpo_results/checkpoint-45"
 MODEL_ID = "llava-hf/llava-1.5-7b-hf"
 DATA_ROOT = "data"
 
@@ -79,7 +79,7 @@ class DataProcessor:
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
 
         self.model = LlavaForConditionalGeneration.from_pretrained(
-            MODEL_ID,
+            FINE_TUNED_MODEL_DIR,
             torch_dtype=torch.float16,
             quantization_config=BitsAndBytesConfig(
                 load_in_4bit=True,
@@ -89,10 +89,9 @@ class DataProcessor:
             ),
             device_map="cuda:0",
         )
-
-        self.model = PeftModel.from_pretrained(
-            self.model, FINE_TUNED_MODEL_DIR, torch_dtype=torch.float16
-        )
+        # self.model = PeftModel.from_pretrained(
+        #     self.model, FINE_TUNED_MODEL_DIR, torch_dtype=torch.float16
+        # )
         self.model.eval()
 
     def get_prompt(self, task_type):
