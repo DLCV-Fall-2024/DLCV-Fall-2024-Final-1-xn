@@ -69,7 +69,6 @@ from .utils import (
 if is_peft_available():
     from peft import PeftModel, get_peft_model, prepare_model_for_kbit_training
 
-
 if is_wandb_available():
     import wandb
 
@@ -629,6 +628,7 @@ class DPOTrainer(Trainer):
                 dataset, Dataset
             ):  # `IterableDataset.map` does not support `desc`
                 map_kwargs["desc"] = f"Applying chat template to {dataset_name} dataset"
+
             dataset = dataset.map(
                 maybe_apply_chat_template,
                 fn_kwargs={"tokenizer": processing_class},
@@ -739,6 +739,12 @@ class DPOTrainer(Trainer):
         """
         Same as `tokenize_row` but for vision models. Please refer to `tokenize_row` for more information.
         """
+        from PIL import Image
+
+        features["images"] = (
+            Image.open(features["images"]).convert("RGB").resize((224, 224))
+        )
+
         processor, tokenizer = (
             processing_class,
             processing_class.tokenizer,
@@ -749,6 +755,7 @@ class DPOTrainer(Trainer):
 
         prompt_input_ids = processed_features["input_ids"][0]
         pixel_values = processed_features["pixel_values"][0]
+
         chosen_input_ids = tokenizer(features["chosen"], add_special_tokens=False)[
             "input_ids"
         ]

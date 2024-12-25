@@ -155,6 +155,7 @@ def apply_chat_template(
     if "label" in example:
         output["label"] = example["label"]
 
+    raise ValueError(output)
     return output
 
 
