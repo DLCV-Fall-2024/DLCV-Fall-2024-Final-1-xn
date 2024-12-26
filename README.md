@@ -1,6 +1,11 @@
 # DLCV Final Project
 
 # How to run your code?
+## Dependencies
+```
+pip install -r requirement.txt
+```
+## Train Lora
 ## How to download_dataset
 ```
 python3 download_dataset.py
@@ -15,7 +20,7 @@ python3 dpo.py
 ```
 ## How to inference the model(submitted version):
 ```
-python3 inference_local.py
+python3 inference_submitted.py
 ```
 ## How to inference depth_anything rag:
 ```

@@ -10,8 +10,8 @@ from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalG
 # Configuration
 MAX_TOKEN = 300
 BATCH_SIZE = 8  # Adjust based on your GPU memory
-OUTPUT_DIR = "inference_results_qkvo"
-FINE_TUNED_MODEL_DIR = "fine_tuned_results_origin/dora_rank64_qkvo/2"
+OUTPUT_DIR = "inference_results"
+FINE_TUNED_MODEL_DIR = "fine_tuned_results/lora_epoch_1"
 MODEL_ID = "llava-hf/llava-1.5-7b-hf"
 DATA_ROOT = "data"
 
