@@ -1,14 +1,43 @@
 # DLCV Final Project
 
 # How to run your code?
-* TODO: Please provide the scripts for TAs to reproduce your results, including training and inference. For example,
-
+## How to download_dataset
 ```
-bash train.sh <Path to gt image folder> <Path to annot file>
-bash inference.sh <Path to gt image folder> <Path to annot file> <Path to predicted file>
+python3 download_dataset.py
+```
+## Train Lora
+```
+python3 dora/dora_train.py
+```
+## Train DPO
+```
+python3 dpo.py
+```
+## How to inference the model(submitted version):
+```
+python3 inference_local.py
+```
+## How to inference depth_anything rag:
+```
+bash build_retriever.sh
+bash rag2.sh
 ```
 
-You can add more arguments to the script if you need.
+## How to inference a checkpoint (without RAG):
+```
+python inference_local.py \
+    --ckpt_dir <your checkpoint directory> (example:fine_tuned_results/lora_epoch_1)\
+    --output_dir inference_results_qkvo \
+    --data_root data
+```
+
+## How to inference a checkpoint (with RAG):
+```
+python rag2.py \
+    --ckpt_dir <your checkpoint directory> \
+    --output_dir inference_results_qkvo \
+    --data_root data
+```
 
 # Usage
 To start working on this final project, you should clone this repository into your local machine by the following command:
@@ -123,19 +152,3 @@ If you have any problems related to Final Project, you may
 - Use TA hours
 - Contact TAs by e-mail ([ntudlcv@gmail.com](mailto:ntudlcv@gmail.com))
 - Post your question under `[Final challenge 1] Discussion` section in NTU Cool Discussion
-
-# How to download_dataset
-```
-python3 download_dataset.py
-```
-
-# How to run depth_anything rag:
-```
-bash build_retriever.sh
-bash depth_anything_rag.sh
-```
-
-# How to run local llama evaluation
-```
-bash llama_eval_local.sh
-```

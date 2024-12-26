@@ -181,7 +181,7 @@ parser.add_argument("--data_path", type=str, default="ntudlcv/dlcv_2024_final1")
 parser.add_argument("--output_dir", type=str, default="fine_tuned_results")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument(
-    "--num_epochs", type=int, default=3, help="Number of training epochs"
+    "--num_epochs", type=int, default=2, help="Number of training epochs"
 )
 parser.add_argument("--learning_rate", type=float, default=3e-4, help="Learning rate")
 parser.add_argument(
