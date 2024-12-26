@@ -5,7 +5,7 @@
 ```
 python3 download_dataset.py
 ```
-## Train Lora
+## Train Lora (If your GPU does not support flash attention, you can comment out line 235)
 ```
 python3 dora/dora_train.py
 ```
