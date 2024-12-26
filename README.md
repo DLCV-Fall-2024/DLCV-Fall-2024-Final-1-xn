@@ -5,7 +5,7 @@
 ```
 python3 download_dataset.py
 ```
-## Training
+## Train Lora
 ```
 python3 dora/dora_train.py
 ```
