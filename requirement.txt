@@ -61,3 +61,4 @@ gdown
 
 # trl
 trl
+flash-attn
