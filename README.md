@@ -128,14 +128,33 @@ If you have any problems related to Final Project, you may
 ```
 python3 download_dataset.py
 ```
+# How to inference the model(submitted version):
+```
+python3 inference_local.py
+```
 
-# How to run depth_anything rag:
+
+
+
+
+# How to inference depth_anything rag:
 ```
 bash build_retriever.sh
-bash depth_anything_rag.sh
+bash rag2.sh
 ```
 
-# How to run local llama evaluation
+# How to inference a checkpoint(without RAG):
 ```
-bash llama_eval_local.sh
+python inference_local.py \
+    --ckpt_dir fine_tuned_results_origin/dora_rank64_qkvo/2 \
+    --output_dir inference_results_qkvo \
+    --data_root data
+```
+
+# How to inference a checkpoint(with RAG):
+```
+python inference_local.py \
+    --ckpt_dir fine_tuned_results_origin/dora_rank64_qkvo/2 \
+    --output_dir inference_results_qkvo \
+    --data_root data
 ```
