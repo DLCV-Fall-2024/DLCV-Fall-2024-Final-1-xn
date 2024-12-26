@@ -5,22 +5,25 @@
 ```
 python3 download_dataset.py
 ```
+## Training
+```
+python3 dora/dora_train.py
+```
+## Train DPO
+```
+python3 dpo.py
+```
 ## How to inference the model(submitted version):
 ```
 python3 inference_local.py
 ```
-
-
-
-
-
 ## How to inference depth_anything rag:
 ```
 bash build_retriever.sh
 bash rag2.sh
 ```
 
-## How to inference a checkpoint(without RAG):
+## How to inference a checkpoint (without RAG):
 ```
 python inference_local.py \
     --ckpt_dir fine_tuned_results_origin/dora_rank64_qkvo/2 \
@@ -28,7 +31,7 @@ python inference_local.py \
     --data_root data
 ```
 
-## How to inference a checkpoint(with RAG):
+## How to inference a checkpoint (with RAG):
 ```
 python inference_local.py \
     --ckpt_dir fine_tuned_results_origin/dora_rank64_qkvo/2 \
