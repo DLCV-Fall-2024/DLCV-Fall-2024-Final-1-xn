@@ -26,15 +26,15 @@ bash rag2.sh
 ## How to inference a checkpoint (without RAG):
 ```
 python inference_local.py \
-    --ckpt_dir fine_tuned_results_origin/dora_rank64_qkvo/2 \
+    --ckpt_dir <your checkpoint directory> (example:fine_tuned_results/lora_epoch_1)\
     --output_dir inference_results_qkvo \
     --data_root data
 ```
 
 ## How to inference a checkpoint (with RAG):
 ```
-python inference_local.py \
-    --ckpt_dir fine_tuned_results_origin/dora_rank64_qkvo/2 \
+python rag2.py \
+    --ckpt_dir <your checkpoint directory> \
     --output_dir inference_results_qkvo \
     --data_root data
 ```
